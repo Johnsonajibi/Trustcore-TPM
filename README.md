@@ -77,6 +77,97 @@ if result["violated"]:
 
 ## Architecture
 
+### Component Architecture
+
+```mermaid
+graph TB
+    subgraph "Application Layer"
+        A[Your Application]
+    end
+    
+    subgraph "Library API Layer"
+        B[OfflineVerifier]
+        C[PolicyEngine]
+        D[ConsequenceHandler]
+    end
+    
+    subgraph "Core Engine Layer"
+        E[FingerprintEngine]
+        F[PolicyEngine Core]
+        G[ConsequenceHandler Core]
+        H[AuditLogger]
+    end
+    
+    subgraph "TPM Abstraction Layer"
+        I[TPMOperations]
+    end
+    
+    subgraph "Hardware Layer"
+        J[TPM 2.0 Chip]
+    end
+    
+    A --> B
+    A --> C
+    A --> D
+    B --> E
+    C --> F
+    D --> G
+    E --> I
+    F --> I
+    G --> H
+    H --> I
+    I --> J
+    
+    style J fill:#3498db,stroke:#2980b9,color:#fff
+    style I fill:#95a5a6,stroke:#7f8c8d
+    style E fill:#2ecc71,stroke:#27ae60
+    style F fill:#2ecc71,stroke:#27ae60
+    style G fill:#2ecc71,stroke:#27ae60
+    style H fill:#2ecc71,stroke:#27ae60
+```
+
+### Data Flow
+
+**Enrollment and Verification Sequence**:
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Ver as OfflineVerifier
+    participant FP as FingerprintEngine
+    participant TPM as TPM Hardware
+    participant Policy as PolicyEngine
+    participant Cons as ConsequenceHandler
+    
+    Note over App,TPM: Device Enrollment
+    App->>Ver: enroll_device(device_id)
+    Ver->>FP: generate_fingerprint()
+    FP->>TPM: read_pcrs()
+    TPM-->>FP: PCR values
+    FP->>TPM: seal_data(fingerprint)
+    TPM-->>FP: sealed_blob
+    FP-->>Ver: fingerprint_id
+    Ver-->>App: {success, fingerprint_id}
+    
+    Note over App,Cons: Device Verification
+    App->>Ver: verify_device(device_id)
+    Ver->>FP: verify_fingerprint()
+    FP->>TPM: unseal_data()
+    TPM-->>FP: unsealed_data or FAIL
+    
+    alt Verification Success
+        FP-->>Ver: valid=true
+        Ver-->>App: {valid: true}
+    else Verification Failure
+        FP-->>Ver: valid=false
+        Ver->>Policy: evaluate_policy()
+        Policy-->>Ver: violations
+        Ver->>Cons: execute_consequences()
+        Cons-->>Ver: enforcement_result
+        Ver-->>App: {valid: false, violations}
+    end
+```
+
 ### Core Components
 
 ```
@@ -124,11 +215,27 @@ Device fingerprints are cryptographically bound to TPM Platform Configuration Re
   - Custom policy conditions are triggered
 
 **State Machine**:
-```
-Generated → Valid → Expired → Re-enrollment Required
-         ↑      ↓
-         └──────┘
-    (Successful Verification)
+
+```mermaid
+stateDiagram-v2
+    [*] --> Generated: Device Enrollment
+    Generated --> Valid: TPM Sealing
+    Valid --> Valid: Successful Verification
+    Valid --> Expired: Boot State Change
+    Valid --> Expired: Firmware Update
+    Valid --> Expired: Policy Violation
+    Valid --> Expired: Time Limit Reached
+    Expired --> [*]: Requires Re-enrollment
+    
+    note right of Valid
+        Fingerprint bound to
+        TPM hardware state
+    end note
+    
+    note right of Expired
+        Automatic expiry enforced
+        by cryptographic operations
+    end note
 ```
 
 **Comparison with Traditional Approaches**:
@@ -144,6 +251,24 @@ Generated → Valid → Expired → Re-enrollment Required
 #### 2. TPM-Bound Anti-Cloning
 
 The fingerprint is not a static value—it is a cryptographic capability bound to specific TPM hardware.
+
+**Cloning Attack Flow**:
+
+```mermaid
+graph LR
+    A[Attacker] -->|1. Steals fingerprint data| B[Fingerprint File]
+    B -->|2. Copies to new device| C[Cloned Device]
+    C -->|3. Attempts unseal| D{TPM Check}
+    D -->|Different PCR values| E[Unseal Fails]
+    D -->|Different TPM hardware| E
+    
+    F[Legitimate Device] -->|Verification| G{TPM Unseal}
+    G -->|Correct PCRs| H[Success]
+    G -->|TPM generates proof| H
+    
+    style E fill:#e74c3c,stroke:#c0392b,color:#fff
+    style H fill:#2ecc71,stroke:#27ae60,color:#fff
+```
 
 **Cloning Attack Resistance**:
 
@@ -201,29 +326,28 @@ Device verification is coupled with automatic consequence execution. Policy viol
 
 **Policy Evaluation Flow**:
 
-```
-Device Verification
-        │
-        ▼
-┌───────────────┐
-│ Check Valid?  │
-└───────┬───────┘
-        │
-    ┌───┴───┐
-    │ Yes   │ No
-    ▼       ▼
-  Access  Policy Violation
-  Granted      │
-               ▼
-         Execute Consequences:
-         • Revoke credentials
-         • Lock secure storage
-         • Invalidate tokens
-         • Log audit event
-         • Require re-enrollment
-               │
-               ▼
-         Access Denied
+```mermaid
+graph TD
+    A[Device Verification] --> B{Fingerprint Valid?}
+    B -->|Yes| C[Access Granted]
+    B -->|No| D[Policy Violation Detected]
+    
+    D --> E[Automatic Consequences]
+    E --> F[Revoke Credentials]
+    E --> G[Lock Vaults]
+    E --> H[Invalidate Tokens]
+    E --> I[Seal Audit Event]
+    E --> J[Force Re-enrollment]
+    
+    F --> K[Access Denied]
+    G --> K
+    H --> K
+    I --> K
+    J --> K
+    
+    style C fill:#2ecc71,stroke:#27ae60,color:#fff
+    style K fill:#e74c3c,stroke:#c0392b,color:#fff
+    style E fill:#f39c12,stroke:#e67e22
 ```
 
 **Example Policies**:
@@ -284,14 +408,29 @@ Device → Local TPM → Verification Result
 - Random number generation
 
 **Trust Chain**:
-```
-TPM Hardware Root
-        ↓
-PCR Measurements (Platform State)
-        ↓
-Sealed Credentials
-        ↓
-Application Trust
+
+```mermaid
+graph TB
+    A[TPM 2.0 Hardware Root]
+    B[PCR Measurements]
+    C[Platform State]
+    D[Sealed Credentials]
+    E[Audit Logs]
+    F[Application Trust]
+    
+    A --> B
+    B --> C
+    C --> D
+    C --> E
+    D --> F
+    E --> F
+    
+    style A fill:#3498db,stroke:#2980b9,color:#fff
+    style B fill:#95a5a6,stroke:#7f8c8d
+    style C fill:#95a5a6,stroke:#7f8c8d
+    style D fill:#2ecc71,stroke:#27ae60
+    style E fill:#2ecc71,stroke:#27ae60
+    style F fill:#2ecc71,stroke:#27ae60
 ```
 
 ### Security Properties
