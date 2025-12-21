@@ -1,10 +1,10 @@
-# 📐 Architecture Diagram Index
+# Architecture Diagram Index
 
 This document provides a quick reference to all architectural diagrams included in the TrustCore-TPM documentation.
 
 ---
 
-## 🗺️ Quick Navigation
+## Quick Navigation
 
 | Diagram | Location | Description |
 |---------|----------|-------------|
@@ -26,15 +26,15 @@ This document provides a quick reference to all architectural diagrams included 
 
 ---
 
-## 📊 Diagram Types Used
+## Diagram Types Used
 
-### Mermaid Diagrams (Interactive)
+### Mermaid Diagrams
 - Component graphs (`graph TB`, `graph LR`)
 - Sequence diagrams (`sequenceDiagram`)
 - State machines (`stateDiagram-v2`)
 
-**Benefits:**
-- Rendered beautifully on GitHub
+Benefits:
+- GitHub rendering support
 - Interactive and scalable
 - Easy to modify
 
@@ -44,20 +44,20 @@ This document provides a quick reference to all architectural diagrams included 
 - Flow diagrams
 - Data structures
 
-**Benefits:**
-- Work in plain text
-- Great for terminal viewing
+Benefits:
+- Plain text compatibility
+- Terminal viewing
 - Universal compatibility
 
 ---
 
-## 🎨 Visual Style Guide
+## Visual Style Guide
 
 ### Color Coding (Mermaid)
-- 🔴 **Red** (#e74c3c): Errors, failures, security threats
-- 🟢 **Green** (#2ecc71): Success, valid states, approved
-- 🔵 **Blue** (#3498db): TPM operations, core components
-- 🟡 **Orange** (#f39c12): Warnings, consequences
+- Red (#e74c3c): Errors, failures, security threats
+- Green (#2ecc71): Success, valid states, approved
+- Blue (#3498db): TPM operations, core components
+- Orange (#f39c12): Warnings, consequences
 
 ### Box Types (ASCII)
 - `┌─┐` Single line: Normal components
@@ -66,7 +66,7 @@ This document provides a quick reference to all architectural diagrams included 
 
 ---
 
-## 🔍 Detailed Diagram Descriptions
+## Detailed Diagram Descriptions
 
 ### 1. High-Level Component Architecture
 ```
@@ -164,7 +164,7 @@ Audience: Developers, system designers
 
 ---
 
-## 📚 How to Use These Diagrams
+## How to Use These Diagrams
 
 ### For Learning
 1. Start with **High-Level Component Architecture**
@@ -192,7 +192,7 @@ Audience: Developers, system designers
 
 ---
 
-## 🔧 Modifying Diagrams
+## Modifying Diagrams
 
 ### Mermaid Diagrams
 ```bash
@@ -221,7 +221,7 @@ graph TB
 
 ---
 
-## 📊 Diagram Statistics
+## Diagram Statistics
 
 | Type | Count | Total Lines |
 |------|-------|-------------|
@@ -233,7 +233,7 @@ graph TB
 
 ---
 
-## 🎯 Best Practices
+## Best Practices
 
 ### When Creating New Diagrams
 
@@ -257,7 +257,7 @@ graph TB
 
 ---
 
-## 🔗 Related Resources
+## Related Resources
 
 - [README.md](README.md) - Main documentation with all diagrams
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Detailed architecture documentation

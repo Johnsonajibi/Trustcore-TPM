@@ -64,9 +64,9 @@ try:
         enrollment['fingerprint_id'],
         enrollment['policy_id']
     )
-    print("✓ Device verified successfully")
+    print(" Device verified successfully")
 except Exception as e:
-    print(f"✗ Verification failed: {e}")
+    print(f" Verification failed: {e}")
 ```
 
 ### 2. Command-Line Quick Start
@@ -221,11 +221,11 @@ enrollment = verifier.enroll_device(
 # Basic verification
 try:
     verifier.verify_device(fingerprint_id, policy_id)
-    print("✓ Verified")
+    print(" Verified")
 except PolicyViolationError as e:
-    print(f"✗ Policy violated: {e}")
+    print(f" Policy violated: {e}")
 except BootStateChangedError as e:
-    print(f"✗ Boot state changed: {e}")
+    print(f" Boot state changed: {e}")
 ```
 
 ### Challenge-Response Verification
@@ -235,11 +235,11 @@ except BootStateChangedError as e:
 result = verifier.challenge_response_verify(fingerprint_id)
 
 if result['verified']:
-    print("✓ Challenge verified - device is live")
+    print(" Challenge verified - device is live")
     print(f"Challenge: {result['challenge']}")
     print(f"PCRs: {result['pcr_values']}")
 else:
-    print("✗ Challenge failed")
+    print(" Challenge failed")
 ```
 
 ### State Comparison
@@ -249,9 +249,9 @@ else:
 comparison = verifier.compare_with_baseline(fingerprint_id, policy_id)
 
 if comparison['all_match']:
-    print("✓ All PCRs match baseline")
+    print(" All PCRs match baseline")
 else:
-    print("✗ Deviations detected:")
+    print(" Deviations detected:")
     for pcr, info in comparison['deviations'].items():
         if not info['match']:
             print(f"  PCR {pcr}: changed")
@@ -308,7 +308,7 @@ for cred_data in credentials:
     valid = verifier.consequence_handler.is_credential_valid(
         cred_data['credential_id']
     )
-    print(f"{cred_data['credential_id']}: {'✓' if valid else '✗'}")
+    print(f"{cred_data['credential_id']}: {'' if valid else ''}")
 ```
 
 ### Vault Management
@@ -368,9 +368,9 @@ print(f"Events by type: {stats['events_by_type']}")
 # Verify audit log integrity
 verification = logger.verify_log_chain()
 if verification['verified']:
-    print("✓ Audit log chain verified")
+    print(" Audit log chain verified")
 else:
-    print("✗ Audit log integrity compromised")
+    print(" Audit log integrity compromised")
     for error in verification['errors']:
         print(f"  - {error}")
 
@@ -638,3 +638,4 @@ sudo usermod -a -G tss $USER
 ---
 
 **For additional help, consult the comprehensive README.md or open an issue on GitHub.**
+

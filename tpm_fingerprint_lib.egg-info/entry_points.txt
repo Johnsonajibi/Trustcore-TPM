@@ -1,2 +1,0 @@
-[console_scripts]
-tpm-fingerprint = tpm_fingerprint_lib.cli:main

@@ -46,7 +46,7 @@ verifier.verify_device(
     enrollment['policy_id']
 )
 
-print("✓ Device verified!")
+print(" Device verified!")
 ```
 
 ## Run Examples
@@ -79,40 +79,40 @@ pytest tests/ --cov=tpm_fingerprint_lib
 
 ```
 Device-fingerprinting-TPM/
-├── tpm_fingerprint_lib/      # Main library
-│   ├── tpm_ops.py             # TPM operations
-│   ├── fingerprint_engine.py  # Fingerprinting
-│   ├── policy_engine.py       # Policy enforcement
-│   ├── consequence_handler.py # Consequence management
-│   ├── offline_verifier.py    # Offline verification
-│   ├── audit_logger.py        # Audit logging
-│   └── cli.py                 # Command-line interface
-│
-├── examples/                  # Usage examples
-│   ├── basic_usage.py
-│   ├── advanced_policy_enforcement.py
-│   └── offline_verification.py
-│
-├── tests/                     # Test suite
-│   └── test_library.py
-│
-├── README.md                  # Main documentation
-├── USAGE_GUIDE.md            # Detailed usage guide
-├── ARCHITECTURE.md           # Architecture documentation
-├── PATENTS.md                # Patent information
-├── PROJECT_SUMMARY.md        # Project overview
-├── requirements.txt          # Dependencies
-└── setup.py                  # Installation script
+ tpm_fingerprint_lib/      # Main library
+    tpm_ops.py             # TPM operations
+    fingerprint_engine.py  # Fingerprinting
+    policy_engine.py       # Policy enforcement
+    consequence_handler.py # Consequence management
+    offline_verifier.py    # Offline verification
+    audit_logger.py        # Audit logging
+    cli.py                 # Command-line interface
+
+ examples/                  # Usage examples
+    basic_usage.py
+    advanced_policy_enforcement.py
+    offline_verification.py
+
+ tests/                     # Test suite
+    test_library.py
+
+ README.md                  # Main documentation
+ USAGE_GUIDE.md            # Detailed usage guide
+ ARCHITECTURE.md           # Architecture documentation
+ PATENTS.md                # Patent information
+ PROJECT_SUMMARY.md        # Project overview
+ requirements.txt          # Dependencies
+ setup.py                  # Installation script
 ```
 
 ## Key Features at a Glance
 
-✅ **TPM-Bound Fingerprints** - Cannot be cloned or exported  
-✅ **Non-Replayable** - Requires live TPM signing  
-✅ **Automatic Consequences** - Enforced, not just logged  
-✅ **Offline Verification** - No server required  
-✅ **Policy Enforcement** - State-based governance  
-✅ **Audit Logging** - TPM-sealed, tamper-evident  
+ **TPM-Bound Fingerprints** - Cannot be cloned or exported  
+ **Non-Replayable** - Requires live TPM signing  
+ **Automatic Consequences** - Enforced, not just logged  
+ **Offline Verification** - No server required  
+ **Policy Enforcement** - State-based governance  
+ **Audit Logging** - TPM-sealed, tamper-evident  
 
 ## Common Commands
 
@@ -155,3 +155,4 @@ tpm-fingerprint audit events --limit 50            # List events
 ---
 
 **Start securing your devices with TPM-based fingerprinting today!**
+

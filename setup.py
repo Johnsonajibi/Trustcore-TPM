@@ -4,14 +4,14 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="tpm-fingerprint-lib",
-    version="1.0.0",
-    author="TPM Fingerprint Library",
-    author_email="your.email@example.com",
-    description="Comprehensive TPM-based device fingerprinting with cryptographically enforced governance",
+    name="trustcore-tpm",
+    version="1.0.1",
+    author="TrustCore-TPM",
+    author_email="contact@example.com",
+    description="TPM-based device fingerprinting library with hardware-enforced identity governance",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/tpm-fingerprint-lib",
+    url="https://github.com/Johnsonajibi/Trustcore-TPM",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -57,13 +57,12 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "tpm-fingerprint=tpm_fingerprint_lib.cli:main",
+            "trustcore-tpm=tpm_fingerprint_lib.cli:main",
         ],
     },
     keywords="tpm fingerprint security attestation hardware cryptography policy enforcement",
     project_urls={
-        "Bug Reports": "https://github.com/yourusername/tpm-fingerprint-lib/issues",
-        "Source": "https://github.com/yourusername/tpm-fingerprint-lib",
-        "Documentation": "https://tpm-fingerprint-lib.readthedocs.io/",
+        "Bug Reports": "https://github.com/Johnsonajibi/Trustcore-TPM/issues",
+        "Source": "https://github.com/Johnsonajibi/Trustcore-TPM",
     },
 )
