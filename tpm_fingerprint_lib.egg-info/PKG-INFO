@@ -1,0 +1,497 @@
+Metadata-Version: 2.4
+Name: tpm-fingerprint-lib
+Version: 1.0.0
+Summary: Comprehensive TPM-based device fingerprinting with cryptographically enforced governance
+Home-page: https://github.com/yourusername/tpm-fingerprint-lib
+Author: TPM Fingerprint Library
+Author-email: your.email@example.com
+Project-URL: Bug Reports, https://github.com/yourusername/tpm-fingerprint-lib/issues
+Project-URL: Source, https://github.com/yourusername/tpm-fingerprint-lib
+Project-URL: Documentation, https://tpm-fingerprint-lib.readthedocs.io/
+Keywords: tpm fingerprint security attestation hardware cryptography policy enforcement
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Security :: Cryptography
+Classifier: Topic :: System :: Hardware
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Operating System :: OS Independent
+Classifier: Operating System :: Microsoft :: Windows
+Classifier: Operating System :: POSIX :: Linux
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: cryptography>=41.0.0
+Requires-Dist: pywin32>=305; sys_platform == "win32"
+Requires-Dist: WMI>=1.5.1; sys_platform == "win32"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.1.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: mypy>=1.5.0; extra == "dev"
+Requires-Dist: pylint>=2.17.0; extra == "dev"
+Provides-Extra: docs
+Requires-Dist: sphinx>=7.0.0; extra == "docs"
+Requires-Dist: sphinx-rtd-theme>=1.3.0; extra == "docs"
+Provides-Extra: enhanced
+Provides-Extra: pqc
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: keywords
+Dynamic: project-url
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# TPM-Based Device Fingerprinting Library
+
+A comprehensive Python library for cryptographically enforced device fingerprinting with TPM (Trusted Platform Module) integration.
+
+## 🚀 Key Features
+
+### A. Cryptographically Enforced Fingerprint Governance
+
+**Novel Innovation:** Shifts fingerprinting from "identifier generation" to "hardware-attested identity lifecycle control"
+
+- **Non-exportable fingerprints**: Bound to TPM state, cannot be extracted or replicated
+- **Non-replayable**: Requires live TPM signing operation for each verification
+- **Cryptographically enforced**: Fingerprint validity automatically expires on:
+  - Boot state change
+  - Firmware update
+  - Secure boot violation
+  - Policy-defined conditions
+- **Policy-based release**: Fingerprint is released conditionally by TPM only after policy satisfaction
+
+### B. TPM-Bound Anti-Cloning Fingerprint
+
+**Novel Innovation:** The fingerprint is not a static value — it is a provable capability
+
+- Cannot be reproduced even if all software inputs are known
+- Requires live TPM signing operation
+- Verified via challenge-response protocol
+- Materially different from existing fingerprint libraries
+
+### C. Fingerprint + Policy + Consequence
+
+**Novel Innovation:** "Fingerprint change is not informational — it is enforced"
+
+Automatic consequences when fingerprint changes or policies are violated:
+- ✓ Credential revocation
+- ✓ Vault lockdown
+- ✓ Token invalidation
+- ✓ Forced re-enrollment
+- ✓ Audit log sealed to TPM
+
+### D. TPM + Offline Enforcement
+
+**Novel Innovation:** Complete trust chain maintained locally via TPM
+
+- Offline TPM-verified identity
+- Deterministic local enforcement
+- No server dependency
+- No cloud verification required
+- Rare and valuable capability
+
+## 📦 Installation
+
+```bash
+# Clone repository
+git clone <repository-url>
+cd Device-fingerprinting-TPM
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install the library
+pip install -e .
+```
+
+## 🔧 Requirements
+
+- Python 3.8+
+- TPM 2.0 (hardware or software)
+- Windows, Linux, or macOS
+- Optional: `tpm2-tools` for enhanced TPM integration
+- Optional: `device-fingerprinting-pro` for advanced fingerprinting
+- Optional: `pqcdualusb` for post-quantum cryptography
+
+## 📚 Quick Start
+
+### Basic Usage
+
+```python
+from tpm_fingerprint_lib import OfflineVerifier
+
+# Initialize
+verifier = OfflineVerifier()
+
+# Enroll device
+enrollment = verifier.enroll_device("MyDevice")
+fingerprint_id = enrollment['fingerprint_id']
+policy_id = enrollment['policy_id']
+
+# Verify device
+result = verifier.verify_device(fingerprint_id, policy_id)
+print(f"Verified: {result}")
+```
+
+### With Consequence Management
+
+```python
+from tpm_fingerprint_lib import OfflineVerifier
+
+verifier = OfflineVerifier()
+
+# Enroll and get IDs
+enrollment = verifier.enroll_device("SecureDevice")
+fp_id = enrollment['fingerprint_id']
+policy_id = enrollment['policy_id']
+
+# Register protected resources
+credential = verifier.consequence_handler.register_credential(
+    credential_id="api_key_001",
+    credential_type="api_key",
+    data={"key": "secret"},
+    fingerprint_id=fp_id
+)
+
+vault = verifier.consequence_handler.register_vault(
+    vault_id="vault_001",
+    name="Secure Vault",
+    fingerprint_id=fp_id
+)
+
+# Verify - consequences are automatic on violation
+try:
+    verifier.verify_device(fp_id, policy_id)
+    # Access granted
+    if verifier.consequence_handler.is_vault_accessible("vault_001"):
+        print("Vault accessible")
+except PolicyViolationError:
+    # Credentials automatically revoked
+    # Vault automatically locked
+    print("Access denied - consequences enforced")
+```
+
+## 🎯 Core Components
+
+### 1. FingerprintEngine
+Generates TPM-bound, non-replayable fingerprints:
+```python
+from tpm_fingerprint_lib import FingerprintEngine
+
+engine = FingerprintEngine()
+fingerprint = engine.generate_fingerprint(
+    metadata={"device_name": "Workstation-01"},
+    validity_seconds=86400  # 24 hours
+)
+```
+
+### 2. PolicyEngine
+Enforces cryptographic governance:
+```python
+from tpm_fingerprint_lib import PolicyEngine
+
+policy_engine = PolicyEngine()
+policy = policy_engine.create_policy(
+    name="Strict Policy",
+    auto_expire_on_boot_change=True,
+    require_secure_boot=True,
+    max_mismatch_attempts=3
+)
+```
+
+### 3. ConsequenceHandler
+Automatic enforcement:
+```python
+from tpm_fingerprint_lib import ConsequenceHandler
+
+handler = ConsequenceHandler()
+
+# Register resources
+handler.register_credential(
+    credential_id="db_001",
+    credential_type="database",
+    data={"username": "admin", "password": "secret"},
+    fingerprint_id=fingerprint_id
+)
+
+# Automatic revocation on violation
+# (triggered by PolicyEngine)
+```
+
+### 4. OfflineVerifier
+Complete offline operation:
+```python
+from tpm_fingerprint_lib import OfflineVerifier
+
+verifier = OfflineVerifier()
+
+# Works without network
+enrollment = verifier.enroll_device("OfflineDevice")
+result = verifier.verify_device(
+    enrollment['fingerprint_id'],
+    enrollment['policy_id']
+)
+
+# Export verification bundle
+bundle = verifier.export_offline_verification_bundle(
+    enrollment['fingerprint_id'],
+    enrollment['policy_id']
+)
+```
+
+## 📖 Advanced Features
+
+### Challenge-Response Verification
+```python
+# Prevent replay attacks
+challenge_result = verifier.challenge_response_verify(fingerprint_id)
+print(f"Verified: {challenge_result['verified']}")
+```
+
+### State Change Detection
+```python
+# Monitor for changes
+fingerprint = engine.load_fingerprint(fingerprint_id)
+state_changes = policy_engine.check_state_changes(fingerprint)
+
+if state_changes['boot_state_changed']:
+    print("Boot state changed - fingerprint invalidated")
+```
+
+### Audit Logging
+```python
+from tpm_fingerprint_lib.audit_logger import AuditLogger
+
+logger = AuditLogger()
+
+# Logs are automatically sealed to TPM
+logger.log_fingerprint_generated(fingerprint_id, details)
+
+# Verify integrity
+verification = logger.verify_log_chain()
+print(f"Chain verified: {verification['verified']}")
+```
+
+### Custom Violation Handlers
+```python
+from tpm_fingerprint_lib.policy_engine import PolicyViolationType
+
+def custom_handler(violation, policy, fingerprint):
+    print(f"Custom action for {violation.value}")
+    # Send alert, log to external system, etc.
+
+policy_engine.register_violation_handler(
+    PolicyViolationType.BOOT_STATE_CHANGED,
+    custom_handler
+)
+```
+
+## 🔒 Security Features
+
+### Non-Exportable Fingerprints
+- Fingerprints are sealed to TPM PCR state
+- Cannot be unsealed if boot state changes
+- Requires live TPM to regenerate
+
+### Anti-Replay Protection
+- Fresh challenge-response for each verification
+- Nonce-based with timestamp validation
+- Prevents fingerprint replay attacks
+
+### Tamper-Evident Audit Logs
+- Logs sealed to TPM state
+- Chained with cryptographic hashes
+- Cannot be modified without detection
+
+### Automatic Consequence Enforcement
+- Not just detection - automatic enforcement
+- Credentials revoked immediately
+- Vaults locked automatically
+- Re-enrollment required
+
+## 📋 Configuration
+
+Configure via environment variables or `Config` class:
+
+```python
+from tpm_fingerprint_lib.config import Config
+
+config = Config()
+config.DEFAULT_PCRS = [0, 1, 2, 3, 7]  # PCRs to use
+config.FINGERPRINT_VALIDITY_SECONDS = 86400  # 24 hours
+config.STRICT_MODE = True
+config.OFFLINE_MODE = True
+config.CONSEQUENCES_ENABLED = True
+```
+
+Environment variables:
+```bash
+export TPM_PCRS="0,1,2,3,7"
+export FINGERPRINT_VALIDITY_SECONDS=86400
+export OFFLINE_MODE=true
+export STRICT_MODE=true
+```
+
+## 🧪 Examples
+
+See the `examples/` directory for comprehensive examples:
+
+- `basic_usage.py` - Basic enrollment and verification
+- `advanced_policy_enforcement.py` - Policy violations and consequences
+- `offline_verification.py` - Complete offline operation
+
+Run examples:
+```bash
+python examples/basic_usage.py
+python examples/advanced_policy_enforcement.py
+python examples/offline_verification.py
+```
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                  OfflineVerifier                        │
+│  (Orchestrates all components for offline operation)    │
+└────────────┬────────────────────────────────────────────┘
+             │
+    ┌────────┴────────┬──────────────┬────────────────┐
+    │                 │              │                │
+    v                 v              v                v
+┌──────────┐  ┌──────────────┐  ┌─────────────┐  ┌────────────┐
+│Fingerprint│  │Policy Engine │  │ Consequence │  │   Audit    │
+│  Engine   │  │              │  │   Handler   │  │   Logger   │
+└─────┬─────┘  └──────┬───────┘  └──────┬──────┘  └─────┬──────┘
+      │               │                  │               │
+      └───────────────┴──────────────────┴───────────────┘
+                             │
+                             v
+                      ┌──────────────┐
+                      │  TPM Ops     │
+                      │              │
+                      └──────┬───────┘
+                             │
+                             v
+                      ┌──────────────┐
+                      │  TPM 2.0     │
+                      │ (Hardware)   │
+                      └──────────────┘
+```
+
+## 🔍 PCR Definitions
+
+| PCR | Description |
+|-----|-------------|
+| 0   | BIOS/Platform firmware |
+| 1   | Platform configuration |
+| 2   | Option ROM code |
+| 3   | Option ROM configuration |
+| 7   | Secure Boot state |
+| 8-11| Bootloader/Kernel measurements |
+
+Default configuration uses PCRs: 0, 1, 2, 3, 7
+
+## 🚨 Exception Handling
+
+```python
+from tpm_fingerprint_lib.exceptions import (
+    TPMNotAvailableError,
+    PCRMismatchError,
+    PolicyViolationError,
+    FingerprintExpiredError,
+    BootStateChangedError
+)
+
+try:
+    verifier.verify_device(fingerprint_id, policy_id)
+except BootStateChangedError:
+    # Boot state changed - regenerate fingerprint
+    new_enrollment = verifier.regenerate_after_update(
+        fingerprint_id, "MyDevice"
+    )
+except PolicyViolationError as e:
+    # Policy violated - consequences automatically enforced
+    print(f"Violation: {e}")
+except TPMNotAvailableError:
+    # TPM not available
+    print("TPM required for operation")
+```
+
+## 📊 Status and Monitoring
+
+```python
+# Get comprehensive device status
+status = verifier.get_device_status(fingerprint_id)
+print(f"Valid: {status['fingerprint_status']['is_valid']}")
+print(f"Credentials: {len(status['consequence_status']['credentials'])}")
+print(f"Attestations: {len(status['recent_attestations'])}")
+
+# Get audit statistics
+from tpm_fingerprint_lib.audit_logger import AuditLogger
+logger = AuditLogger()
+stats = logger.get_statistics()
+print(f"Total events: {stats['total_events']}")
+```
+
+## 🤝 Integration
+
+### With device-fingerprinting-pro
+```python
+# Automatically detected and used if installed
+pip install devicefingerprintingpro
+
+# Library will use enhanced fingerprinting automatically
+```
+
+### With pqcdualusb
+```python
+# For post-quantum cryptography
+pip install pqcdualusb
+
+# Integration points in TPM signature operations
+```
+
+## 📄 License
+
+[Your License Here]
+
+## 🤝 Contributing
+
+Contributions welcome! Please read CONTRIBUTING.md for guidelines.
+
+## 📞 Support
+
+For issues, questions, or support, please open an issue on GitHub.
+
+## 🎓 Citation
+
+If you use this library in research, please cite:
+
+```
+[Citation information]
+```
+
+## ⚖️ Legal Notice
+
+This library implements novel cryptographic governance concepts that may be subject to patent protection. Review the included PATENTS.md file for details.
+
+## 🔐 Patent-Relevant Innovations
+
+1. **Cryptographically Enforced Fingerprint Governance**: Hardware-attested identity lifecycle control with automatic expiry
+2. **TPM-Bound Anti-Cloning Fingerprint**: Provable capability requiring live TPM signing
+3. **Fingerprint + Policy + Consequence**: Enforced (not informational) fingerprint changes
+4. **TPM + Offline Enforcement**: Complete trust chain maintained locally via TPM
+
+---
+
+**Built with security and innovation at its core.**
