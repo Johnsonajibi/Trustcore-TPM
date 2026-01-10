@@ -56,16 +56,28 @@ class OfflineAttestation:
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'OfflineAttestation':
-        att = cls(
-            attestation_id=data["attestation_id"],
-            fingerprint_id=data["fingerprint_id"],
-            policy_id=data["policy_id"],
-            tpm_quote=data["tpm_quote"],
-            result=data["result"],
-            timestamp=datetime.fromisoformat(data["timestamp"])
-        )
-        att.metadata = data.get("metadata", {})
-        return att
+        """Deserialize from dictionary with validation"""
+        if not isinstance(data, dict):
+            raise TypeError("Input must be a dictionary")
+        
+        required_fields = ["attestation_id", "fingerprint_id", "policy_id", "tpm_quote", "result", "timestamp"]
+        for field in required_fields:
+            if field not in data:
+                raise ValueError(f"Missing required field: {field}")
+        
+        try:
+            att = cls(
+                attestation_id=data["attestation_id"],
+                fingerprint_id=data["fingerprint_id"],
+                policy_id=data["policy_id"],
+                tpm_quote=data["tpm_quote"],
+                result=data["result"],
+                timestamp=datetime.fromisoformat(data["timestamp"])
+            )
+            att.metadata = data.get("metadata", {})
+            return att
+        except (ValueError, KeyError, TypeError) as e:
+            raise ValueError(f"Invalid attestation data: {e}") from e
 
 
 class OfflineVerifier:

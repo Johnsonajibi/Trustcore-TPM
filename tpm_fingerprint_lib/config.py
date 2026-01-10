@@ -24,27 +24,6 @@ class Config:
     # Maximum allowed PCR deviation attempts before lockdown
     MAX_PCR_MISMATCH_ATTEMPTS: int = 3
     
-    # Audit log location
-    AUDIT_LOG_PATH: Path = Path.home() / ".tpm_fingerprint" / "audit.log"
-    
-    # Sealed data storage path
-    SEALED_DATA_PATH: Path = Path.home() / ".tpm_fingerprint" / "sealed"
-    
-    # Fingerprint storage path (encrypted, TPM-bound)
-    FINGERPRINT_STORAGE_PATH: Path = Path.home() / ".tpm_fingerprint" / "fingerprints"
-    
-    # Policy storage path
-    POLICY_STORAGE_PATH: Path = Path.home() / ".tpm_fingerprint" / "policies"
-    
-    # Enable offline mode (no server verification)
-    OFFLINE_MODE: bool = True
-    
-    # TPM path (for Linux systems)
-    TPM_DEVICE_PATH: str = "/dev/tpm0"
-    
-    # Enable strict mode (enforce all policies)
-    STRICT_MODE: bool = True
-    
     # Hash algorithm for fingerprinting
     HASH_ALGORITHM: str = "sha256"
     
@@ -64,14 +43,33 @@ class Config:
     ENABLE_AUDIT_LOGGING: bool = True
     SEAL_AUDIT_LOGS: bool = True
     
+    # Enable offline mode (no server verification)
+    OFFLINE_MODE: bool = True
+    
+    # TPM path (for Linux systems)
+    TPM_DEVICE_PATH: str = "/dev/tpm0"
+    
+    # Enable strict mode (enforce all policies)
+    STRICT_MODE: bool = True
+    
+    def __init__(self):
+        """Initialize config with instance-specific paths to avoid mutable class attributes"""
+        # Use instance attributes for Path objects to avoid sharing mutable state
+        self.AUDIT_LOG_PATH: Path = Path.home() / ".tpm_fingerprint" / "audit.log"
+        self.SEALED_DATA_PATH: Path = Path.home() / ".tpm_fingerprint" / "sealed"
+        self.FINGERPRINT_STORAGE_PATH: Path = Path.home() / ".tpm_fingerprint" / "fingerprints"
+        self.POLICY_STORAGE_PATH: Path = Path.home() / ".tpm_fingerprint" / "policies"
+    
     @classmethod
     def ensure_directories(cls):
         """Create necessary directories if they don't exist"""
+        # Create an instance to get the instance-specific paths
+        instance = cls()
         directories = [
-            cls.AUDIT_LOG_PATH.parent,
-            cls.SEALED_DATA_PATH,
-            cls.FINGERPRINT_STORAGE_PATH,
-            cls.POLICY_STORAGE_PATH
+            instance.AUDIT_LOG_PATH.parent,
+            instance.SEALED_DATA_PATH,
+            instance.FINGERPRINT_STORAGE_PATH,
+            instance.POLICY_STORAGE_PATH
         ]
         for directory in directories:
             directory.mkdir(parents=True, exist_ok=True)

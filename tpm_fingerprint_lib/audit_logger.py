@@ -10,6 +10,7 @@ Provides tamper-evident, TPM-sealed audit logging:
 
 import json
 import logging
+import threading
 from typing import Dict, Optional, Any, List
 from datetime import datetime
 from pathlib import Path
@@ -94,17 +95,28 @@ class AuditEvent:
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'AuditEvent':
-        """Deserialize from dictionary"""
-        event = cls(
-            event_type=AuditEventType(data["event_type"]),
-            details=data["details"],
-            fingerprint_id=data.get("fingerprint_id"),
-            policy_id=data.get("policy_id")
-        )
-        event.event_id = data["event_id"]
-        event.timestamp = datetime.fromisoformat(data["timestamp"])
-        event.sealed = data.get("sealed", False)
-        return event
+        """Deserialize from dictionary with validation"""
+        if not isinstance(data, dict):
+            raise TypeError("Input must be a dictionary")
+        
+        required_fields = ["event_type", "details", "event_id", "timestamp"]
+        for field in required_fields:
+            if field not in data:
+                raise ValueError(f"Missing required field: {field}")
+        
+        try:
+            event = cls(
+                event_type=AuditEventType(data["event_type"]),
+                details=data["details"],
+                fingerprint_id=data.get("fingerprint_id"),
+                policy_id=data.get("policy_id")
+            )
+            event.event_id = data["event_id"]
+            event.timestamp = datetime.fromisoformat(data["timestamp"])
+            event.sealed = data.get("sealed", False)
+            return event
+        except (ValueError, KeyError) as e:
+            raise ValueError(f"Invalid audit event data: {e}") from e
 
 
 class AuditLogger:
@@ -129,6 +141,7 @@ class AuditLogger:
         
         self._current_log: List[AuditEvent] = []
         self._max_events_before_seal = 100
+        self._lock = threading.Lock()  # Add thread safety
         
         # Setup Python logging
         self._setup_logging()
@@ -181,25 +194,27 @@ class AuditLogger:
             fingerprint_id: Associated fingerprint ID
             policy_id: Associated policy ID
         """
-        # Create event
-        event = AuditEvent(event_type, details, fingerprint_id, policy_id)
-        
-        # Add to current log
-        self._current_log.append(event)
-        
-        # Log to Python logger
-        self.logger.info(f"{event_type.value}: {json.dumps(details)}")
-        
-        # Save current log
-        self._save_current_log()
-        
-        # Check if we should seal
-        if len(self._current_log) >= self._max_events_before_seal:
-            if self.config.SEAL_AUDIT_LOGS:
-                self._seal_and_rotate()
+        with self._lock:  # Thread-safe access
+            # Create event
+            event = AuditEvent(event_type, details, fingerprint_id, policy_id)
+            
+            # Add to current log
+            self._current_log.append(event)
+            
+            # Log to Python logger
+            self.logger.info(f"{event_type.value}: {json.dumps(details)}")
+            
+            # Save current log
+            self._save_current_log()
+            
+            # Check if we should seal
+            if len(self._current_log) >= self._max_events_before_seal:
+                if self.config.SEAL_AUDIT_LOGS:
+                    self._seal_and_rotate()
     
     def _seal_and_rotate(self):
         """Seal current log to TPM and rotate"""
+        # Note: This method is called from within log_event which already holds the lock
         if not self._current_log:
             return
         
@@ -264,8 +279,9 @@ class AuditLogger:
     
     def force_seal(self):
         """Force sealing of current log"""
-        if self.config.SEAL_AUDIT_LOGS:
-            self._seal_and_rotate()
+        with self._lock:  # Thread-safe access
+            if self.config.SEAL_AUDIT_LOGS:
+                self._seal_and_rotate()
     
     def get_events(self, event_type: Optional[AuditEventType] = None,
                    fingerprint_id: Optional[str] = None,
@@ -289,12 +305,13 @@ class AuditLogger:
         Returns:
             List of matching audit events
         """
-        events = []
+        with self._lock:  # Thread-safe access
+            events = []
+            
+            # Get current unsealed events
+            events.extend(self._current_log)
         
-        # Get current unsealed events
-        events.extend(self._current_log)
-        
-        # Get sealed events if requested
+        # Get sealed events if requested (outside lock since it may take time)
         if include_sealed:
             sealed_events = self._get_sealed_events()
             events.extend(sealed_events)

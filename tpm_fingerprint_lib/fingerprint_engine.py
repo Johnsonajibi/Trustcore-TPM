@@ -73,19 +73,30 @@ class DeviceFingerprint:
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'DeviceFingerprint':
-        """Deserialize from dictionary"""
-        fp = cls(
-            fingerprint_id=data["fingerprint_id"],
-            pcr_values=data["pcr_values"],
-            created_at=datetime.fromisoformat(data["created_at"]),
-            expires_at=datetime.fromisoformat(data["expires_at"]) if data["expires_at"] else None,
-            tpm_quote=data["tpm_quote"],
-            metadata=data["metadata"]
-        )
-        fp._validated = data.get("validated", False)
-        if data.get("last_validation"):
-            fp._last_validation = datetime.fromisoformat(data["last_validation"])
-        return fp
+        """Deserialize from dictionary with validation"""
+        if not isinstance(data, dict):
+            raise TypeError("Input must be a dictionary")
+        
+        required_fields = ["fingerprint_id", "pcr_values", "created_at", "tpm_quote", "metadata"]
+        for field in required_fields:
+            if field not in data:
+                raise ValueError(f"Missing required field: {field}")
+        
+        try:
+            fp = cls(
+                fingerprint_id=data["fingerprint_id"],
+                pcr_values=data["pcr_values"],
+                created_at=datetime.fromisoformat(data["created_at"]),
+                expires_at=datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None,
+                tpm_quote=data["tpm_quote"],
+                metadata=data["metadata"]
+            )
+            fp._validated = data.get("validated", False)
+            if data.get("last_validation"):
+                fp._last_validation = datetime.fromisoformat(data["last_validation"])
+            return fp
+        except (ValueError, KeyError, TypeError) as e:
+            raise ValueError(f"Invalid fingerprint data: {e}") from e
 
 
 class FingerprintEngine:

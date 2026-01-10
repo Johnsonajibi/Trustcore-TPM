@@ -11,6 +11,7 @@ Handles direct interaction with TPM for:
 import hashlib
 import secrets
 import time
+import threading
 from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime, timedelta
 import json
@@ -34,6 +35,7 @@ class TPMOperations:
         self.config = config or Config()
         self._tpm_available = None
         self._nonce_cache: Dict[str, Tuple[bytes, datetime]] = {}
+        self._nonce_lock = threading.Lock()  # Add thread safety for nonce cache
         
     def is_tpm_available(self) -> bool:
         """Check if TPM is available on the system"""
@@ -206,17 +208,18 @@ class TPMOperations:
         nonce = secrets.token_bytes(self.config.CHALLENGE_NONCE_SIZE)
         challenge_id = base64.b64encode(nonce[:16]).decode()
         
-        # Cache with expiry
-        expiry = datetime.now() + timedelta(seconds=self.config.NONCE_LIFETIME_SECONDS)
-        self._nonce_cache[challenge_id] = (nonce, expiry)
-        
-        # Clean expired nonces
-        self._clean_expired_nonces()
+        with self._nonce_lock:  # Thread-safe access
+            # Cache with expiry
+            expiry = datetime.now() + timedelta(seconds=self.config.NONCE_LIFETIME_SECONDS)
+            self._nonce_cache[challenge_id] = (nonce, expiry)
+            
+            # Clean expired nonces
+            self._clean_expired_nonces()
         
         return nonce
     
     def _clean_expired_nonces(self):
-        """Remove expired nonces from cache"""
+        """Remove expired nonces from cache - must be called with lock held"""
         now = datetime.now()
         expired = [cid for cid, (_, exp) in self._nonce_cache.items() if exp < now]
         for cid in expired:
@@ -234,18 +237,20 @@ class TPMOperations:
             True if response is valid
         """
         try:
-            # Check nonce validity
             challenge_id = base64.b64encode(challenge[:16]).decode()
-            if challenge_id not in self._nonce_cache:
-                raise ChallengeResponseError("Challenge not found or expired")
             
-            cached_nonce, expiry = self._nonce_cache[challenge_id]
-            if datetime.now() > expiry:
-                del self._nonce_cache[challenge_id]
-                raise ChallengeResponseError("Challenge expired")
-            
-            if cached_nonce != challenge:
-                raise ChallengeResponseError("Challenge mismatch")
+            with self._nonce_lock:  # Thread-safe access
+                # Check nonce validity
+                if challenge_id not in self._nonce_cache:
+                    raise ChallengeResponseError("Challenge not found or expired")
+                
+                cached_nonce, expiry = self._nonce_cache[challenge_id]
+                if datetime.now() > expiry:
+                    del self._nonce_cache[challenge_id]
+                    raise ChallengeResponseError("Challenge expired")
+                
+                if cached_nonce != challenge:
+                    raise ChallengeResponseError("Challenge mismatch")
             
             # Verify HMAC signature
             signature = response.get("signature")
@@ -271,7 +276,9 @@ class TPMOperations:
             expected_sig = hmac.new(signing_key, response_data.encode(), hashlib.sha256).hexdigest()
             
             # Remove used nonce
-            del self._nonce_cache[challenge_id]
+            with self._nonce_lock:
+                if challenge_id in self._nonce_cache:
+                    del self._nonce_cache[challenge_id]
             
             return signature == expected_sig
             
