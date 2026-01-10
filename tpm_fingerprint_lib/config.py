@@ -60,16 +60,13 @@ class Config:
         self.FINGERPRINT_STORAGE_PATH: Path = Path.home() / ".tpm_fingerprint" / "fingerprints"
         self.POLICY_STORAGE_PATH: Path = Path.home() / ".tpm_fingerprint" / "policies"
     
-    @classmethod
-    def ensure_directories(cls):
+    def ensure_directories(self):
         """Create necessary directories if they don't exist"""
-        # Create an instance to get the instance-specific paths
-        instance = cls()
         directories = [
-            instance.AUDIT_LOG_PATH.parent,
-            instance.SEALED_DATA_PATH,
-            instance.FINGERPRINT_STORAGE_PATH,
-            instance.POLICY_STORAGE_PATH
+            self.AUDIT_LOG_PATH.parent,
+            self.SEALED_DATA_PATH,
+            self.FINGERPRINT_STORAGE_PATH,
+            self.POLICY_STORAGE_PATH
         ]
         for directory in directories:
             directory.mkdir(parents=True, exist_ok=True)
@@ -118,5 +115,6 @@ PCR_DEFINITIONS: Dict[int, str] = {
 }
 
 
-# Initialize directories on import
-Config.ensure_directories()
+# Initialize directories on import for default instance
+_default_config = Config()
+_default_config.ensure_directories()

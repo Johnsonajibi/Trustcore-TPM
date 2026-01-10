@@ -52,7 +52,7 @@ class DeviceFingerprint:
         """Check if fingerprint has expired"""
         if self.expires_at is None:
             return False
-        return datetime.now() > self.expires_at
+        return datetime.now() >= self.expires_at
     
     def is_valid(self) -> bool:
         """Check if fingerprint is still valid"""
@@ -136,7 +136,7 @@ class FingerprintEngine:
         4. Sealing fingerprint to current PCR state
         """
         pcr_indices = pcr_indices or self.config.DEFAULT_PCRS
-        validity_seconds = validity_seconds or self.config.FINGERPRINT_VALIDITY_SECONDS
+        validity_seconds = validity_seconds if validity_seconds is not None else self.config.FINGERPRINT_VALIDITY_SECONDS
         metadata = metadata or {}
         
         # Read current TPM state
@@ -164,7 +164,7 @@ class FingerprintEngine:
         # Set expiry
         created_at = datetime.now()
         expires_at = None
-        if validity_seconds:
+        if validity_seconds is not None:
             expires_at = created_at + timedelta(seconds=validity_seconds)
         
         # Create fingerprint object
