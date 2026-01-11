@@ -9,7 +9,6 @@ Handles direct interaction with TPM for:
 """
 
 import hashlib
-import secrets
 import time
 import threading
 from typing import Dict, List, Optional, Tuple, Any
@@ -200,6 +199,37 @@ class TPMOperations:
         
         return pcr_values
     
+    def get_tpm_random_bytes(self, num_bytes: int) -> bytes:
+        """
+        Get random bytes from TPM RNG (FIPS 140-2 Level 2)
+        Falls back to os.urandom() if TPM not available
+        
+        Args:
+            num_bytes: Number of random bytes to generate
+            
+        Returns:
+            Random bytes
+        """
+        try:
+            if self.is_tpm_available():
+                import subprocess
+                result = subprocess.run(
+                    ["tpm2_getrandom", str(num_bytes)],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    # Parse hex output from tpm2_getrandom
+                    hex_output = result.stdout.strip()
+                    return bytes.fromhex(hex_output)
+        except Exception:
+            pass
+        
+        # Fallback to OS RNG
+        import os
+        return os.urandom(num_bytes)
+    
     def generate_challenge(self) -> bytes:
         """
         Generate a cryptographic challenge (nonce)
@@ -207,7 +237,7 @@ class TPMOperations:
         Returns:
             Random nonce bytes
         """
-        nonce = secrets.token_bytes(self.config.CHALLENGE_NONCE_SIZE)
+        nonce = self.get_tpm_random_bytes(self.config.CHALLENGE_NONCE_SIZE)
         challenge_id = base64.b64encode(nonce[:16]).decode()
         
         with self._nonce_lock:  # Thread-safe access
@@ -401,19 +431,32 @@ class TPMOperations:
             raise UnsealingError(f"Failed to unseal data: {e}")
     
     def _derive_key_from_pcrs(self, pcr_values: Dict[int, str]) -> bytes:
-        """Derive encryption key from PCR values"""
+        """Derive encryption key from PCR values using HKDF-SHA256"""
+        from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.backends import default_backend
+        
+        # Concatenate PCR values in sorted order
         pcr_concatenated = "".join(
             pcr_values[idx] for idx in sorted(pcr_values.keys())
         )
-        return hashlib.sha256(pcr_concatenated.encode()).digest()
+        
+        # Use HKDF-SHA256 for proper key derivation
+        hkdf = HKDF(
+            algorithm=hashes.SHA256(),
+            length=32,  # 256-bit key
+            salt=b"trustcore-tpm-salt",
+            info=b"key-derivation",
+            backend=default_backend()
+        )
+        return hkdf.derive(pcr_concatenated.encode())
     
     def _encrypt_data(self, data: bytes, key: bytes) -> bytes:
         """AES-GCM encryption"""
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-        import os
         
-        # Generate random nonce
-        nonce = os.urandom(12)  # 96 bits for GCM
+        # Generate random nonce using TPM RNG
+        nonce = self.get_tpm_random_bytes(12)  # 96 bits for GCM
         
         # Create cipher
         aesgcm = AESGCM(key)
@@ -453,7 +496,7 @@ class TPMOperations:
             Quote dictionary with signature and PCR values
         """
         pcr_indices = pcr_indices or self.config.DEFAULT_PCRS
-        nonce = nonce or secrets.token_bytes(32)
+        nonce = nonce or self.get_tpm_random_bytes(32)
         
         try:
             pcr_values = self.read_pcrs(pcr_indices)
