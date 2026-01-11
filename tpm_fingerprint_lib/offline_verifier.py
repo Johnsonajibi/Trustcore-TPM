@@ -15,6 +15,7 @@ from typing import Dict, Optional, Any, List
 from datetime import datetime
 import hashlib
 from pathlib import Path
+import logging
 
 from .tpm_ops import TPMOperations
 from .fingerprint_engine import DeviceFingerprint, FingerprintEngine
@@ -97,6 +98,7 @@ class OfflineVerifier:
         self.fingerprint_engine = FingerprintEngine(self.config, self.tpm)
         self.policy_engine = PolicyEngine(self.config, self.tpm, self.fingerprint_engine)
         self.consequence_handler = ConsequenceHandler(self.config)
+        self.logger = logging.getLogger(__name__)
         
         self._attestation_storage = Path.home() / ".tpm_fingerprint" / "attestations"
         self._attestation_storage.mkdir(parents=True, exist_ok=True)
@@ -514,3 +516,129 @@ class OfflineVerifier:
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             }
+    
+    def revoke_device(self, fingerprint_id: str) -> bool:
+        """
+        Revoke a device fingerprint
+        
+        Args:
+            fingerprint_id: Fingerprint to revoke
+            
+        Returns:
+            True if revocation successful
+        """
+        try:
+            # Load fingerprint
+            try:
+                fingerprint = self.fingerprint_engine.load_fingerprint(fingerprint_id)
+            except Exception:
+                # Fingerprint might not be loadable if state changed, that's OK
+                pass
+            
+            # Revoke all associated credentials
+            all_credentials = self.consequence_handler.get_credentials_for_fingerprint(fingerprint_id)
+            for credential in all_credentials:
+                self.consequence_handler.revoke_credential(
+                    credential.credential_id,
+                    "Device revoked"
+                )
+            
+            # Lock all vaults
+            all_vaults = self.consequence_handler.get_vaults_for_fingerprint(fingerprint_id)
+            for vault in all_vaults:
+                self.consequence_handler.lock_vault(vault.vault_id, "Device revoked")
+            
+            # Invalidate all tokens
+            all_tokens = self.consequence_handler.get_tokens_for_fingerprint(fingerprint_id)
+            for token in all_tokens:
+                self.consequence_handler.invalidate_token(token.token_id, "Device revoked")
+            
+            # Mark fingerprint as revoked
+            fingerprint_file = self.config.FINGERPRINT_STORAGE_PATH / f"{fingerprint_id}.sealed"
+            revocation_file = self.config.FINGERPRINT_STORAGE_PATH / f"{fingerprint_id}.revoked"
+            revocation_file.write_text(json.dumps({
+                "fingerprint_id": fingerprint_id,
+                "revoked_at": datetime.now().isoformat(),
+                "reason": "Device revoked"
+            }))
+            
+            # Log revocation
+            from .audit_logger import AuditLogger, AuditEventType
+            logger = AuditLogger()
+            logger.log_event(
+                AuditEventType.DEVICE_REENROLLMENT_REQUIRED,
+                {"fingerprint_id": fingerprint_id, "reason": "Device revoked"},
+                fingerprint_id=fingerprint_id
+            )
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to revoke device {fingerprint_id}: {e}")
+            return False
+    
+    def list_devices(self) -> List[Dict[str, Any]]:
+        """
+        List all enrolled devices
+        
+        Returns:
+            List of device dictionaries with fingerprint_id, device_name, enrolled_at
+        """
+        try:
+            devices = []
+            
+            # Scan fingerprint storage directory
+            for fingerprint_file in self.config.FINGERPRINT_STORAGE_PATH.glob("*.sealed"):
+                try:
+                    fingerprint_id = fingerprint_file.stem
+                    
+                    # Load fingerprint
+                    try:
+                        fingerprint = self.fingerprint_engine.load_fingerprint(fingerprint_id)
+                        
+                        # Check if revoked
+                        revocation_file = self.config.FINGERPRINT_STORAGE_PATH / f"{fingerprint_id}.revoked"
+                        is_revoked = revocation_file.exists()
+                        
+                        device_info = {
+                            "fingerprint_id": fingerprint_id,
+                            "device_name": fingerprint.metadata.get("device_name", "Unknown"),
+                            "enrolled_at": fingerprint.created_at.isoformat(),
+                            "expires_at": fingerprint.expires_at.isoformat() if fingerprint.expires_at else None,
+                            "is_valid": fingerprint.is_valid(),
+                            "is_revoked": is_revoked,
+                            "pcr_count": len(fingerprint.pcr_values)
+                        }
+                        
+                        devices.append(device_info)
+                        
+                    except Exception as e:
+                        # If we can't load fingerprint (e.g., state changed), show limited info
+                        revocation_file = self.config.FINGERPRINT_STORAGE_PATH / f"{fingerprint_id}.revoked"
+                        is_revoked = revocation_file.exists()
+                        
+                        device_info = {
+                            "fingerprint_id": fingerprint_id,
+                            "device_name": "Unknown",
+                            "enrolled_at": None,
+                            "expires_at": None,
+                            "is_valid": False,
+                            "is_revoked": is_revoked,
+                            "pcr_count": 0,
+                            "error": "Could not load fingerprint (state may have changed)"
+                        }
+                        
+                        devices.append(device_info)
+                    
+                except Exception as e:
+                    self.logger.warning(f"Error processing fingerprint file {fingerprint_file}: {e}")
+                    continue
+            
+            # Sort by enrolled_at (if available)
+            devices.sort(key=lambda x: x.get("enrolled_at") or "", reverse=True)
+            
+            return devices
+            
+        except Exception as e:
+            self.logger.error(f"Failed to list devices: {e}")
+            return []

@@ -521,6 +521,27 @@ class ConsequenceHandler:
         
         return history
     
+    def get_credentials_for_fingerprint(self, fingerprint_id: str) -> List[Credential]:
+        """Get all credentials for a fingerprint"""
+        return [
+            cred for cred in self._credentials.values()
+            if cred.fingerprint_id == fingerprint_id
+        ]
+    
+    def get_tokens_for_fingerprint(self, fingerprint_id: str) -> List[Token]:
+        """Get all tokens for a fingerprint"""
+        return [
+            token for token in self._tokens.values()
+            if token.fingerprint_id == fingerprint_id
+        ]
+    
+    def get_vaults_for_fingerprint(self, fingerprint_id: str) -> List[Vault]:
+        """Get all vaults for a fingerprint"""
+        return [
+            vault for vault in self._vaults.values()
+            if vault.fingerprint_id == fingerprint_id
+        ]
+    
     def get_status_for_fingerprint(self, fingerprint_id: str) -> Dict[str, Any]:
         """Get status of all resources bound to a fingerprint"""
         credentials = [
