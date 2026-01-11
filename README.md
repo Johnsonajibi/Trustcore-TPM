@@ -20,8 +20,18 @@ TrustCore-TPM is a Python library for hardware-based device fingerprinting using
 
 ## Installation
 
+### From PyPI (when published)
+
 ```bash
 pip install trustcore-tpm
+```
+
+### From Source (Development)
+
+```bash
+git clone https://github.com/Johnsonajibi/Trustcore-TPM.git
+cd Trustcore-TPM
+pip install -e .
 ```
 
 ### Requirements

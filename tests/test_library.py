@@ -417,5 +417,161 @@ class TestIntegration:
         assert status["fingerprint_status"]["is_valid"] is True
 
 
+class TestNewFeatures:
+    """Test newly implemented features"""
+    
+    def test_hkdf_key_derivation(self, temp_config):
+        """Test HKDF-SHA256 key derivation"""
+        tpm = TPMOperations(temp_config)
+        
+        pcrs = tpm.read_pcrs([0, 1, 2])
+        key = tpm._derive_key_from_pcrs(pcrs)
+        
+        # Key should be 32 bytes (256 bits)
+        assert isinstance(key, bytes)
+        assert len(key) == 32
+        
+        # Same PCRs should produce same key
+        key2 = tpm._derive_key_from_pcrs(pcrs)
+        assert key == key2
+    
+    def test_tpm_random_bytes(self, temp_config):
+        """Test TPM RNG (with fallback to os.urandom)"""
+        tpm = TPMOperations(temp_config)
+        
+        # Generate random bytes
+        random1 = tpm.get_tpm_random_bytes(32)
+        random2 = tpm.get_tpm_random_bytes(32)
+        
+        # Should return correct length
+        assert len(random1) == 32
+        assert len(random2) == 32
+        
+        # Should be different (extremely high probability)
+        assert random1 != random2
+    
+    def test_revoke_device(self, temp_config):
+        """Test device revocation"""
+        verifier = OfflineVerifier(temp_config)
+        
+        # Enroll device
+        enrollment = verifier.enroll_device("TestDevice")
+        fp_id = enrollment["fingerprint_id"]
+        
+        # Register resources
+        verifier.consequence_handler.register_credential(
+            credential_id="test_cred_revoke",
+            credential_type="api",
+            data={"key": "value"},
+            fingerprint_id=fp_id
+        )
+        
+        verifier.consequence_handler.register_token(
+            token_id="test_token_revoke",
+            token_value="token123",
+            fingerprint_id=fp_id
+        )
+        
+        verifier.consequence_handler.register_vault(
+            vault_id="test_vault_revoke",
+            name="Test Vault",
+            fingerprint_id=fp_id
+        )
+        
+        # Revoke device
+        result = verifier.revoke_device(fp_id)
+        assert result is True
+        
+        # Check resources are revoked/locked/invalidated
+        assert verifier.consequence_handler.is_credential_valid("test_cred_revoke") is False
+        assert verifier.consequence_handler.is_token_valid("test_token_revoke") is False
+        assert verifier.consequence_handler.is_vault_accessible("test_vault_revoke") is False
+        
+        # Check revocation file exists
+        revocation_file = temp_config.FINGERPRINT_STORAGE_PATH / f"{fp_id}.revoked"
+        assert revocation_file.exists()
+    
+    def test_list_devices(self, temp_config):
+        """Test device listing"""
+        verifier = OfflineVerifier(temp_config)
+        
+        # Initially should be empty
+        devices = verifier.list_devices()
+        initial_count = len(devices)
+        
+        # Enroll devices
+        enrollment1 = verifier.enroll_device("Device1")
+        enrollment2 = verifier.enroll_device("Device2")
+        
+        # List devices
+        devices = verifier.list_devices()
+        assert len(devices) == initial_count + 2
+        
+        # Check device info structure
+        for device in devices:
+            assert "fingerprint_id" in device
+            assert "device_name" in device
+            assert "enrolled_at" in device
+            assert "is_valid" in device
+            assert "is_revoked" in device
+        
+        # Check specific devices are present
+        device_ids = [d["fingerprint_id"] for d in devices]
+        assert enrollment1["fingerprint_id"] in device_ids
+        assert enrollment2["fingerprint_id"] in device_ids
+    
+    def test_consequence_handler_helpers(self, temp_config):
+        """Test consequence handler helper methods"""
+        handler = ConsequenceHandler(temp_config)
+        
+        # Register resources for a fingerprint
+        fp_id = "test_fingerprint_123"
+        
+        handler.register_credential(
+            credential_id="cred1",
+            credential_type="api",
+            data={"key": "value1"},
+            fingerprint_id=fp_id
+        )
+        
+        handler.register_credential(
+            credential_id="cred2",
+            credential_type="ssh",
+            data={"key": "value2"},
+            fingerprint_id=fp_id
+        )
+        
+        handler.register_token(
+            token_id="token1",
+            token_value="token_val1",
+            fingerprint_id=fp_id
+        )
+        
+        handler.register_vault(
+            vault_id="vault1",
+            name="Vault 1",
+            fingerprint_id=fp_id
+        )
+        
+        # Test helper methods
+        credentials = handler.get_credentials_for_fingerprint(fp_id)
+        assert len(credentials) == 2
+        assert all(c.fingerprint_id == fp_id for c in credentials)
+        
+        tokens = handler.get_tokens_for_fingerprint(fp_id)
+        assert len(tokens) == 1
+        assert tokens[0].fingerprint_id == fp_id
+        
+        vaults = handler.get_vaults_for_fingerprint(fp_id)
+        assert len(vaults) == 1
+        assert vaults[0].fingerprint_id == fp_id
+        
+        # Test get_status_for_fingerprint
+        status = handler.get_status_for_fingerprint(fp_id)
+        assert len(status["credentials"]) == 2
+        assert len(status["tokens"]) == 1
+        assert len(status["vaults"]) == 1
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
