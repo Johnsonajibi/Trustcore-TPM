@@ -9,7 +9,6 @@ Handles direct interaction with TPM for:
 """
 
 import hashlib
-import secrets
 import time
 import threading
 from typing import Dict, List, Optional, Tuple, Any
@@ -497,7 +496,7 @@ class TPMOperations:
             Quote dictionary with signature and PCR values
         """
         pcr_indices = pcr_indices or self.config.DEFAULT_PCRS
-        nonce = nonce or secrets.token_bytes(32)
+        nonce = nonce or self.get_tpm_random_bytes(32)
         
         try:
             pcr_values = self.read_pcrs(pcr_indices)

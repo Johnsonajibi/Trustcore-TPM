@@ -12,7 +12,6 @@ Key features:
 
 import hashlib
 import json
-import secrets
 import hmac
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
@@ -143,7 +142,7 @@ class FingerprintEngine:
         pcr_values = self.tpm.read_pcrs(pcr_indices)
         
         # Get TPM quote (signed attestation)
-        nonce = secrets.token_bytes(32)
+        nonce = self.tpm.get_tpm_random_bytes(32)
         tpm_quote = self.tpm.get_tpm_quote(pcr_indices, nonce)
         
         # Generate fingerprint components
