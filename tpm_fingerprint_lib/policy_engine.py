@@ -138,25 +138,36 @@ class Policy:
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Policy':
-        """Deserialize from dictionary"""
-        policy = cls(
-            policy_id=data["policy_id"],
-            name=data["name"],
-            pcr_baseline=data["pcr_baseline"],
-            max_mismatch_attempts=data.get("max_mismatch_attempts", 3),
-            validity_seconds=data.get("validity_seconds"),
-            auto_expire_on_boot_change=data.get("auto_expire_on_boot_change", True),
-            auto_expire_on_firmware_update=data.get("auto_expire_on_firmware_update", True),
-            require_secure_boot=data.get("require_secure_boot", True),
-            actions={
-                PolicyViolationType(k): [PolicyAction(a) for a in v]
-                for k, v in data.get("actions", {}).items()
-            },
-            metadata=data.get("metadata", {})
-        )
-        policy.created_at = datetime.fromisoformat(data["created_at"])
-        policy.mismatch_count = data.get("mismatch_count", 0)
-        return policy
+        """Deserialize from dictionary with validation"""
+        if not isinstance(data, dict):
+            raise TypeError("Input must be a dictionary")
+        
+        required_fields = ["policy_id", "name", "pcr_baseline", "created_at"]
+        for field in required_fields:
+            if field not in data:
+                raise ValueError(f"Missing required field: {field}")
+        
+        try:
+            policy = cls(
+                policy_id=data["policy_id"],
+                name=data["name"],
+                pcr_baseline=data["pcr_baseline"],
+                max_mismatch_attempts=data.get("max_mismatch_attempts", 3),
+                validity_seconds=data.get("validity_seconds"),
+                auto_expire_on_boot_change=data.get("auto_expire_on_boot_change", True),
+                auto_expire_on_firmware_update=data.get("auto_expire_on_firmware_update", True),
+                require_secure_boot=data.get("require_secure_boot", True),
+                actions={
+                    PolicyViolationType(k): [PolicyAction(a) for a in v]
+                    for k, v in data.get("actions", {}).items()
+                },
+                metadata=data.get("metadata", {})
+            )
+            policy.created_at = datetime.fromisoformat(data["created_at"])
+            policy.mismatch_count = data.get("mismatch_count", 0)
+            return policy
+        except (ValueError, KeyError, TypeError) as e:
+            raise ValueError(f"Invalid policy data: {e}") from e
 
 
 class PolicyEngine:

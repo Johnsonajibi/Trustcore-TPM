@@ -14,40 +14,57 @@ from tpm_fingerprint_lib.config import Config
 
 def cmd_enroll(args):
     """Enroll a device"""
-    verifier = OfflineVerifier()
-    
-    enrollment = verifier.enroll_device(
-        device_name=args.name,
-        validity_seconds=args.validity if args.validity else None
-    )
-    
-    print(json.dumps(enrollment, indent=2))
-    
-    # Save to file if requested
-    if args.output:
-        Path(args.output).write_text(json.dumps(enrollment, indent=2))
-        print(f"\nEnrollment saved to: {args.output}")
+    try:
+        verifier = OfflineVerifier()
+        
+        enrollment = verifier.enroll_device(
+            device_name=args.name,
+            validity_seconds=args.validity if args.validity else None
+        )
+        
+        print(json.dumps(enrollment, indent=2))
+        
+        # Save to file if requested
+        if args.output:
+            Path(args.output).write_text(json.dumps(enrollment, indent=2))
+            print(f"\nEnrollment saved to: {args.output}")
+    except (ValueError, TypeError) as e:
+        print(f"Error: Invalid input - {e}", file=sys.stderr)
+        sys.exit(1)
+    except IOError as e:
+        print(f"Error: File operation failed - {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_verify(args):
     """Verify a device"""
-    verifier = OfflineVerifier()
-    
     try:
+        verifier = OfflineVerifier()
+        
         result = verifier.verify_device(args.fingerprint_id, args.policy_id)
         print(f"✓ Verification successful: {result}")
         sys.exit(0)
+    except (ValueError, TypeError) as e:
+        print(f"✗ Verification failed: Invalid input - {e}", file=sys.stderr)
+        sys.exit(1)
     except Exception as e:
-        print(f"✗ Verification failed: {e}")
+        print(f"✗ Verification failed: {e}", file=sys.stderr)
         sys.exit(1)
 
 
 def cmd_status(args):
     """Get device status"""
-    verifier = OfflineVerifier()
-    
-    status = verifier.get_device_status(args.fingerprint_id)
-    print(json.dumps(status, indent=2, default=str))
+    try:
+        verifier = OfflineVerifier()
+        
+        status = verifier.get_device_status(args.fingerprint_id)
+        print(json.dumps(status, indent=2, default=str))
+    except (ValueError, TypeError) as e:
+        print(f"Error: Invalid input - {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_challenge(args):
@@ -79,18 +96,28 @@ def cmd_regenerate(args):
 
 def cmd_export(args):
     """Export verification bundle"""
-    verifier = OfflineVerifier()
-    
-    bundle = verifier.export_offline_verification_bundle(
-        args.fingerprint_id,
-        args.policy_id
-    )
-    
-    if args.output:
-        Path(args.output).write_text(json.dumps(bundle, indent=2))
-        print(f"Bundle exported to: {args.output}")
-    else:
-        print(json.dumps(bundle, indent=2, default=str))
+    try:
+        verifier = OfflineVerifier()
+        
+        bundle = verifier.export_offline_verification_bundle(
+            args.fingerprint_id,
+            args.policy_id
+        )
+        
+        if args.output:
+            Path(args.output).write_text(json.dumps(bundle, indent=2))
+            print(f"Bundle exported to: {args.output}")
+        else:
+            print(json.dumps(bundle, indent=2, default=str))
+    except (ValueError, TypeError) as e:
+        print(f"Error: Invalid input - {e}", file=sys.stderr)
+        sys.exit(1)
+    except IOError as e:
+        print(f"Error: File operation failed - {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_audit_stats(args):

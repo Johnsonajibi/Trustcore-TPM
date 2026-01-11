@@ -52,7 +52,7 @@ class DeviceFingerprint:
         """Check if fingerprint has expired"""
         if self.expires_at is None:
             return False
-        return datetime.now() > self.expires_at
+        return datetime.now() >= self.expires_at
     
     def is_valid(self) -> bool:
         """Check if fingerprint is still valid"""
@@ -73,19 +73,30 @@ class DeviceFingerprint:
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'DeviceFingerprint':
-        """Deserialize from dictionary"""
-        fp = cls(
-            fingerprint_id=data["fingerprint_id"],
-            pcr_values=data["pcr_values"],
-            created_at=datetime.fromisoformat(data["created_at"]),
-            expires_at=datetime.fromisoformat(data["expires_at"]) if data["expires_at"] else None,
-            tpm_quote=data["tpm_quote"],
-            metadata=data["metadata"]
-        )
-        fp._validated = data.get("validated", False)
-        if data.get("last_validation"):
-            fp._last_validation = datetime.fromisoformat(data["last_validation"])
-        return fp
+        """Deserialize from dictionary with validation"""
+        if not isinstance(data, dict):
+            raise TypeError("Input must be a dictionary")
+        
+        required_fields = ["fingerprint_id", "pcr_values", "created_at", "tpm_quote", "metadata"]
+        for field in required_fields:
+            if field not in data:
+                raise ValueError(f"Missing required field: {field}")
+        
+        try:
+            fp = cls(
+                fingerprint_id=data["fingerprint_id"],
+                pcr_values=data["pcr_values"],
+                created_at=datetime.fromisoformat(data["created_at"]),
+                expires_at=datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None,
+                tpm_quote=data["tpm_quote"],
+                metadata=data["metadata"]
+            )
+            fp._validated = data.get("validated", False)
+            if data.get("last_validation"):
+                fp._last_validation = datetime.fromisoformat(data["last_validation"])
+            return fp
+        except (ValueError, KeyError, TypeError) as e:
+            raise ValueError(f"Invalid fingerprint data: {e}") from e
 
 
 class FingerprintEngine:
@@ -125,7 +136,7 @@ class FingerprintEngine:
         4. Sealing fingerprint to current PCR state
         """
         pcr_indices = pcr_indices or self.config.DEFAULT_PCRS
-        validity_seconds = validity_seconds or self.config.FINGERPRINT_VALIDITY_SECONDS
+        validity_seconds = validity_seconds if validity_seconds is not None else self.config.FINGERPRINT_VALIDITY_SECONDS
         metadata = metadata or {}
         
         # Read current TPM state
@@ -153,7 +164,7 @@ class FingerprintEngine:
         # Set expiry
         created_at = datetime.now()
         expires_at = None
-        if validity_seconds:
+        if validity_seconds is not None:
             expires_at = created_at + timedelta(seconds=validity_seconds)
         
         # Create fingerprint object

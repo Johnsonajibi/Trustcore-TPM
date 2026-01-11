@@ -67,18 +67,30 @@ class Credential:
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Credential':
-        cred = cls(
-            credential_id=data["credential_id"],
-            credential_type=data["credential_type"],
-            data=data["data"],
-            fingerprint_id=data["fingerprint_id"]
-        )
-        cred.created_at = datetime.fromisoformat(data["created_at"])
-        cred.revoked = data["revoked"]
-        if data.get("revoked_at"):
-            cred.revoked_at = datetime.fromisoformat(data["revoked_at"])
-        cred.revocation_reason = data.get("revocation_reason")
-        return cred
+        """Deserialize from dictionary with validation"""
+        if not isinstance(data, dict):
+            raise TypeError("Input must be a dictionary")
+        
+        required_fields = ["credential_id", "credential_type", "data", "fingerprint_id", "created_at", "revoked"]
+        for field in required_fields:
+            if field not in data:
+                raise ValueError(f"Missing required field: {field}")
+        
+        try:
+            cred = cls(
+                credential_id=data["credential_id"],
+                credential_type=data["credential_type"],
+                data=data["data"],
+                fingerprint_id=data["fingerprint_id"]
+            )
+            cred.created_at = datetime.fromisoformat(data["created_at"])
+            cred.revoked = data["revoked"]
+            if data.get("revoked_at"):
+                cred.revoked_at = datetime.fromisoformat(data["revoked_at"])
+            cred.revocation_reason = data.get("revocation_reason")
+            return cred
+        except (ValueError, KeyError, TypeError) as e:
+            raise ValueError(f"Invalid credential data: {e}") from e
 
 
 class Token:
@@ -123,18 +135,30 @@ class Token:
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Token':
-        token = cls(
-            token_id=data["token_id"],
-            token_value=data["token_value"],
-            fingerprint_id=data["fingerprint_id"],
-            expires_at=datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None
-        )
-        token.created_at = datetime.fromisoformat(data["created_at"])
-        token.invalidated = data["invalidated"]
-        if data.get("invalidated_at"):
-            token.invalidated_at = datetime.fromisoformat(data["invalidated_at"])
-        token.invalidation_reason = data.get("invalidation_reason")
-        return token
+        """Deserialize from dictionary with validation"""
+        if not isinstance(data, dict):
+            raise TypeError("Input must be a dictionary")
+        
+        required_fields = ["token_id", "token_value", "fingerprint_id", "created_at", "invalidated"]
+        for field in required_fields:
+            if field not in data:
+                raise ValueError(f"Missing required field: {field}")
+        
+        try:
+            token = cls(
+                token_id=data["token_id"],
+                token_value=data["token_value"],
+                fingerprint_id=data["fingerprint_id"],
+                expires_at=datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None
+            )
+            token.created_at = datetime.fromisoformat(data["created_at"])
+            token.invalidated = data["invalidated"]
+            if data.get("invalidated_at"):
+                token.invalidated_at = datetime.fromisoformat(data["invalidated_at"])
+            token.invalidation_reason = data.get("invalidation_reason")
+            return token
+        except (ValueError, KeyError, TypeError) as e:
+            raise ValueError(f"Invalid token data: {e}") from e
 
 
 class Vault:
@@ -174,17 +198,29 @@ class Vault:
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Vault':
-        vault = cls(
-            vault_id=data["vault_id"],
-            name=data["name"],
-            fingerprint_id=data["fingerprint_id"]
-        )
-        vault.locked = data["locked"]
-        if data.get("locked_at"):
-            vault.locked_at = datetime.fromisoformat(data["locked_at"])
-        vault.lock_reason = data.get("lock_reason")
-        vault.created_at = datetime.fromisoformat(data["created_at"])
-        return vault
+        """Deserialize from dictionary with validation"""
+        if not isinstance(data, dict):
+            raise TypeError("Input must be a dictionary")
+        
+        required_fields = ["vault_id", "name", "fingerprint_id", "locked", "created_at"]
+        for field in required_fields:
+            if field not in data:
+                raise ValueError(f"Missing required field: {field}")
+        
+        try:
+            vault = cls(
+                vault_id=data["vault_id"],
+                name=data["name"],
+                fingerprint_id=data["fingerprint_id"]
+            )
+            vault.locked = data["locked"]
+            if data.get("locked_at"):
+                vault.locked_at = datetime.fromisoformat(data["locked_at"])
+            vault.lock_reason = data.get("lock_reason")
+            vault.created_at = datetime.fromisoformat(data["created_at"])
+            return vault
+        except (ValueError, KeyError, TypeError) as e:
+            raise ValueError(f"Invalid vault data: {e}") from e
 
 
 class ConsequenceHandler:
