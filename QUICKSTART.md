@@ -21,13 +21,13 @@ sudo apt-get install tpm2-tools
 
 ### 1. Enroll Your Device (CLI)
 ```bash
-tpm-fingerprint enroll MyDevice -o enrollment.json
+trustcore-tpm enroll MyDevice -o enrollment.json
 ```
 
 ### 2. Verify Device (CLI)
 ```bash
 # Use the IDs from enrollment.json
-tpm-fingerprint verify <fingerprint_id> <policy_id>
+trustcore-tpm verify <fingerprint_id> <policy_id>
 ```
 
 ### 3. Python Quick Start
@@ -38,15 +38,20 @@ from tpm_fingerprint_lib import OfflineVerifier
 verifier = OfflineVerifier()
 
 # Enroll
-enrollment = verifier.enroll_device("MyDevice")
-
-# Verify
-verifier.verify_device(
-    enrollment['fingerprint_id'],
-    enrollment['policy_id']
+enrollment = verifier.enroll_device(
+    device_name="MyDevice",
+    validity_seconds=86400  # 24 hours
 )
 
-print(" Device verified!")
+# Verify
+try:
+    result = verifier.verify_device(
+        enrollment['fingerprint_id'],
+        enrollment['policy_id']
+    )
+    print("✓ Device verified!")
+except Exception as e:
+    print(f"✗ Verification failed: {e}")
 ```
 
 ## Run Examples

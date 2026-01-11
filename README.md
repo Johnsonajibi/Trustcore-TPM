@@ -42,37 +42,62 @@ from tpm_fingerprint_lib import OfflineVerifier
 verifier = OfflineVerifier()
 
 # Enroll device
-device_id = "device-001"
-result = verifier.enroll_device(device_id)
+enrollment = verifier.enroll_device(
+    device_name="MyDevice",
+    validity_seconds=86400  # 24 hours
+)
 
-if result["success"]:
-    print(f"Device enrolled: {result['fingerprint_id']}")
+print(f"Device enrolled: {enrollment['fingerprint_id']}")
+print(f"Policy ID: {enrollment['policy_id']}")
     
 # Verify device
-verification = verifier.verify_device(device_id)
-print(f"Valid: {verification['valid']}")
+try:
+    result = verifier.verify_device(
+        enrollment['fingerprint_id'],
+        enrollment['policy_id']
+    )
+    print(f"Verification successful: {result}")
+except Exception as e:
+    print(f"Verification failed: {e}")
 ```
 
-### With Policy Enforcement
+### With Consequence Management
 
 ```python
-from tpm_fingerprint_lib import PolicyEngine, ConsequenceHandler
+from tpm_fingerprint_lib import OfflineVerifier
 
-# Define policy
-policy = {
-    "max_failures": 3,
-    "require_tpm": True,
-    "allowed_pcrs": [0, 1, 2, 3, 7]
-}
+verifier = OfflineVerifier()
 
-# Verify with policy
-engine = PolicyEngine()
-result = engine.evaluate(device_id, policy)
+# Enroll device
+enrollment = verifier.enroll_device(device_name="MyDevice")
 
-if result["violated"]:
-    # Handle consequences
-    handler = ConsequenceHandler()
-    handler.execute(device_id, result["violations"])
+# Register credential bound to fingerprint
+credential = verifier.consequence_handler.register_credential(
+    credential_id="api_key_001",
+    credential_type="api_key",
+    data={"key": "secret_value"},
+    fingerprint_id=enrollment['fingerprint_id']
+)
+
+# Register vault
+vault = verifier.consequence_handler.register_vault(
+    vault_id="vault_001",
+    name="Secure Vault",
+    fingerprint_id=enrollment['fingerprint_id']
+)
+
+# Verify device - consequences enforced automatically on violation
+try:
+    verifier.verify_device(
+        enrollment['fingerprint_id'],
+        enrollment['policy_id']
+    )
+except Exception as e:
+    # Violations trigger automatic consequences:
+    # - Credentials revoked
+    # - Vaults locked
+    # - Tokens invalidated
+    print(f"Policy violation - consequences enforced: {e}")
 ```
 
 ## Architecture
@@ -449,17 +474,27 @@ Main interface for device fingerprinting operations.
 
 ```python
 class OfflineVerifier:
-    def __init__(self, storage_path: str = "~/.tpm_fingerprint/")
+    def __init__(self, config: Optional[Config] = None)
     
-    def enroll_device(self, device_id: str, 
-                     metadata: dict = None) -> dict
+    def enroll_device(self, device_name: str,
+                     pcr_indices: Optional[List[int]] = None,
+                     validity_seconds: Optional[int] = None) -> dict
+        """Returns: dict with fingerprint_id, policy_id, device_name, enrolled_at"""
     
-    def verify_device(self, device_id: str, 
-                     strict: bool = True) -> dict
+    def verify_device(self, fingerprint_id: str, 
+                     policy_id: str,
+                     enforce_consequences: bool = True) -> bool
+        """Returns: True if valid, raises PolicyViolationError if not"""
     
-    def revoke_device(self, device_id: str) -> bool
+    def get_device_status(self, fingerprint_id: str) -> dict
     
-    def list_devices(self) -> list
+    def challenge_response_verify(self, fingerprint_id: str) -> dict
+    
+    def compare_with_baseline(self, fingerprint_id: str, 
+                             policy_id: str) -> dict
+    
+    def regenerate_after_update(self, old_fingerprint_id: str,
+                               device_name: str) -> dict
 ```
 
 ### FingerprintEngine
@@ -468,36 +503,59 @@ Core fingerprinting logic.
 
 ```python
 class FingerprintEngine:
-    def generate_fingerprint(self, device_id: str) -> dict
+    def generate_fingerprint(self, metadata: dict = None,
+                           pcr_indices: List[int] = None,
+                           validity_seconds: int = None) -> DeviceFingerprint
     
-    def verify_fingerprint(self, device_id: str, 
-                          challenge: bytes) -> dict
+    def verify_fingerprint(self, fingerprint: DeviceFingerprint, 
+                          require_fresh: bool = False) -> bool
+    
+    def load_fingerprint(self, fingerprint_id: str) -> DeviceFingerprint
 ```
 
 ### PolicyEngine
 
-Policy evaluation and enforcement.
+Policy creation and validation.
 
 ```python
 class PolicyEngine:
-    def evaluate(self, device_id: str, 
-                policy: dict) -> dict
+    def create_policy(self, name: str,
+                     pcr_baseline: Optional[Dict[int, str]] = None,
+                     **kwargs) -> Policy
     
-    def register_policy(self, policy_id: str, 
-                       policy: dict) -> bool
+    def validate_fingerprint(self, fingerprint: DeviceFingerprint,
+                           policy: Policy) -> bool
+        """Raises PolicyViolationError on validation failure"""
+    
+    def get_policy(self, policy_id: str) -> Optional[Policy]
+    
+    def list_policies(self) -> List[Policy]
 ```
 
 ### ConsequenceHandler
 
-Automatic enforcement actions.
+Automatic enforcement of consequences on policy violations.
 
 ```python
 class ConsequenceHandler:
-    def execute(self, device_id: str, 
-               violations: list) -> dict
+    def register_credential(self, credential_id: str, 
+                          credential_type: str,
+                          data: dict,
+                          fingerprint_id: str) -> Credential
     
-    def register_consequence(self, name: str, 
-                            handler: callable) -> bool
+    def revoke_credential(self, credential_id: str, reason: str)
+    
+    def register_vault(self, vault_id: str, name: str,
+                      fingerprint_id: str) -> Vault
+    
+    def lock_vault(self, vault_id: str, reason: str)
+    
+    def register_token(self, token_id: str, token_value: str,
+                      fingerprint_id: str) -> Token
+    
+    def invalidate_token(self, token_id: str, reason: str)
+    
+    # Consequences are automatically enforced via PolicyEngine violations
 ```
 
 ## Configuration
@@ -567,19 +625,30 @@ TPM_CONFIG = {
 
 ```bash
 # Enroll device
-trustcore-tpm enroll --device-id device-001
+trustcore-tpm enroll MyDevice --validity 86400 -o enrollment.json
 
 # Verify device
-trustcore-tpm verify --device-id device-001
+trustcore-tpm verify <fingerprint_id> <policy_id>
 
-# List devices
-trustcore-tpm list
+# Get device status
+trustcore-tpm status <fingerprint_id>
 
-# Revoke device
-trustcore-tpm revoke --device-id device-001
+# Challenge-response verification
+trustcore-tpm challenge <fingerprint_id>
 
-# Show TPM info
-trustcore-tpm tpm-info
+# Compare with baseline
+trustcore-tpm compare <fingerprint_id> <policy_id>
+
+# List all fingerprints
+trustcore-tpm list-fingerprints
+
+# List all policies
+trustcore-tpm list-policies
+
+# Audit commands
+trustcore-tpm audit stats
+trustcore-tpm audit verify
+trustcore-tpm audit events --limit 50
 ```
 
 ## Advanced Usage

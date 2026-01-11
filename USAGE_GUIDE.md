@@ -73,13 +73,13 @@ except Exception as e:
 
 ```bash
 # Enroll device
-tpm-fingerprint enroll MyDevice --output enrollment.json
+trustcore-tpm enroll MyDevice --output enrollment.json
 
 # Verify device (using IDs from enrollment.json)
-tpm-fingerprint verify <fingerprint_id> <policy_id>
+trustcore-tpm verify <fingerprint_id> <policy_id>
 
 # Get device status
-tpm-fingerprint status <fingerprint_id>
+trustcore-tpm status <fingerprint_id>
 ```
 
 ## Core Concepts
@@ -422,51 +422,51 @@ with open('verification_bundle.json', 'w') as f:
 
 ```bash
 # Enroll device
-tpm-fingerprint enroll MyDevice --validity 86400 -o enrollment.json
+trustcore-tpm enroll MyDevice --validity 86400 -o enrollment.json
 
 # Verify device
-tpm-fingerprint verify <fingerprint_id> <policy_id>
+trustcore-tpm verify <fingerprint_id> <policy_id>
 
 # Get device status
-tpm-fingerprint status <fingerprint_id>
+trustcore-tpm status <fingerprint_id>
 
 # Challenge-response verification
-tpm-fingerprint challenge <fingerprint_id>
+trustcore-tpm challenge <fingerprint_id>
 
 # Compare with baseline
-tpm-fingerprint compare <fingerprint_id> <policy_id>
+trustcore-tpm compare <fingerprint_id> <policy_id>
 
 # Regenerate after update
-tpm-fingerprint regenerate <old_fingerprint_id> MyDevice
+trustcore-tpm regenerate <old_fingerprint_id> MyDevice
 
 # Export verification bundle
-tpm-fingerprint export <fingerprint_id> <policy_id> -o bundle.json
+trustcore-tpm export <fingerprint_id> <policy_id> -o bundle.json
 ```
 
 ### Audit Management
 
 ```bash
 # Show audit statistics
-tpm-fingerprint audit stats
+trustcore-tpm audit stats
 
 # Verify audit log chain
-tpm-fingerprint audit verify
+trustcore-tpm audit verify
 
 # List recent events
-tpm-fingerprint audit events --limit 100
+trustcore-tpm audit events --limit 100
 
 # Filter by fingerprint
-tpm-fingerprint audit events --fingerprint-id <id> --limit 50
+trustcore-tpm audit events --fingerprint-id <id> --limit 50
 ```
 
 ### List Resources
 
 ```bash
 # List all fingerprints
-tpm-fingerprint list-fingerprints
+trustcore-tpm list-fingerprints
 
 # List all policies
-tpm-fingerprint list-policies
+trustcore-tpm list-policies
 ```
 
 ## Configuration

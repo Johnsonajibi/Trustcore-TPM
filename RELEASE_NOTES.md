@@ -58,15 +58,23 @@ from tpm_fingerprint_lib import OfflineVerifier
 verifier = OfflineVerifier()
 
 # Enroll device
-device_id = "device-001"
-result = verifier.enroll_device(device_id)
+enrollment = verifier.enroll_device(
+    device_name="MyDevice",
+    validity_seconds=86400  # 24 hours
+)
 
-if result["success"]:
-    print(f"Device enrolled: {result['fingerprint_id']}")
+print(f"Device enrolled: {enrollment['fingerprint_id']}")
+print(f"Policy ID: {enrollment['policy_id']}")
     
 # Verify device
-verification = verifier.verify_device(device_id)
-print(f"Valid: {verification['valid']}")
+try:
+    result = verifier.verify_device(
+        enrollment['fingerprint_id'],
+        enrollment['policy_id']
+    )
+    print(f"Verification successful: {result}")
+except Exception as e:
+    print(f"Verification failed: {e}")
 ```
 
 ## Documentation
