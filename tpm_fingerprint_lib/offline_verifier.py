@@ -554,7 +554,6 @@ class OfflineVerifier:
                 self.consequence_handler.invalidate_token(token.token_id, "Device revoked")
             
             # Mark fingerprint as revoked
-            fingerprint_file = self.config.FINGERPRINT_STORAGE_PATH / f"{fingerprint_id}.sealed"
             revocation_file = self.config.FINGERPRINT_STORAGE_PATH / f"{fingerprint_id}.revoked"
             revocation_file.write_text(json.dumps({
                 "fingerprint_id": fingerprint_id,
