@@ -49,10 +49,27 @@ class TPMOperations:
                     import wmi
                     c = wmi.WMI(namespace="root\\CIMV2\\Security\\MicrosoftTpm")
                     tpm = c.Win32_Tpm()[0]
-                    self._tpm_available = tpm.IsActivated_ReturnValue and tpm.IsEnabled_ReturnValue
-                except Exception:
-                    # Fallback: try tpm2-tools if available
-                    self._tpm_available = self._check_tpm2_tools()
+                    self._tpm_available = tpm.IsActivated_InitialValue and tpm.IsEnabled_InitialValue
+                except Exception as e:
+                    # Fallback 1: try TBS (TPM Base Services) check for non-admin users
+                    import ctypes
+                    try:
+                        tbs = ctypes.windll.tbs
+                        class TBS_CONTEXT_PARAMS2(ctypes.Structure):
+                            _fields_ = [("version", ctypes.c_uint32),
+                                        ("includeTpm12", ctypes.c_uint32),
+                                        ("includeTpm20", ctypes.c_uint32)]
+                        params = TBS_CONTEXT_PARAMS2(2, 0, 1) # TBS_CONTEXT_VERSION_TWO
+                        hContext = ctypes.c_void_p()
+                        res = tbs.Tbsi_Context_Create(ctypes.byref(params), ctypes.byref(hContext))
+                        if res == 0:
+                            tbs.Tbsip_Context_Close(hContext)
+                            self._tpm_available = True
+                        else:
+                            raise Exception(f"TBS failed with {res}")
+                    except Exception as e2:
+                        # Fallback 2: try tpm2-tools if available
+                        self._tpm_available = self._check_tpm2_tools()
             else:
                 # Linux/Unix TPM check
                 import os
@@ -105,12 +122,83 @@ class TPMOperations:
             raise AttestationFailedError(f"Failed to read PCRs: {e}")
     
     def _read_pcrs_windows(self, pcr_indices: List[int]) -> Dict[int, str]:
-        """Read PCRs on Windows using tpm2-tools or WMI"""
+        """Read PCRs on Windows using TBS (TPM Base Services), falling back to tpm2-tools or WMI"""
         import subprocess
+        import ctypes
+        
         pcr_values = {}
         
+        # 1. Native Windows TBS Approach
         try:
-            # Try tpm2-tools first
+            tbs = ctypes.windll.tbs
+            
+            class TBS_CONTEXT_PARAMS2(ctypes.Structure):
+                _fields_ = [
+                    ("version", ctypes.c_uint32),
+                    ("includeTpm12", ctypes.c_uint32),
+                    ("includeTpm20", ctypes.c_uint32),
+                ]
+            
+            params = TBS_CONTEXT_PARAMS2()
+            params.version = 2 # TBS_CONTEXT_VERSION_TWO
+            params.includeTpm12 = 0
+            params.includeTpm20 = 1
+            
+            hContext = ctypes.c_void_p()
+            
+            status = tbs.Tbsi_Context_Create(ctypes.byref(params), ctypes.byref(hContext))
+            if status == 0: # TBS_SUCCESS
+                try:
+                    for pcr_idx in pcr_indices:
+                        # Calculate bitmask for the requested PCR
+                        byte_idx = pcr_idx // 8
+                        bit_idx = pcr_idx % 8
+                        
+                        pcr_select_bytes = bytearray(3)
+                        if byte_idx < 3:
+                            pcr_select_bytes[byte_idx] = (1 << bit_idx)
+                        
+                        # TPM2_PCR_Read command
+                        cmd = bytearray([
+                            0x80, 0x01,             # TPM_ST_NO_SESSIONS
+                            0x00, 0x00, 0x00, 0x14, # Size = 20 bytes
+                            0x00, 0x00, 0x01, 0x7E, # TPM_CC_PCR_Read
+                            0x00, 0x00, 0x00, 0x01, # count = 1
+                            0x00, 0x0B,             # hashAlg = TPM_ALG_SHA256
+                            0x03,                   # sizeofSelect = 3
+                            pcr_select_bytes[0], pcr_select_bytes[1], pcr_select_bytes[2]
+                        ])
+                        
+                        cmd_buf = (ctypes.c_byte * len(cmd))(*cmd)
+                        result_buf = (ctypes.c_byte * 4096)()
+                        result_len = ctypes.c_uint32(4096)
+                        
+                        status = tbs.Tbsip_Submit_Command(
+                            hContext,
+                            0, # TBS_COMMAND_LOCALITY_ZERO
+                            0, # TBS_COMMAND_PRIORITY_NORMAL
+                            ctypes.cast(cmd_buf, ctypes.POINTER(ctypes.c_byte)),
+                            len(cmd),
+                            ctypes.cast(result_buf, ctypes.POINTER(ctypes.c_byte)),
+                            ctypes.byref(result_len)
+                        )
+                        
+                        if status == 0:
+                            res_bytes = bytes(result_buf[:result_len.value])
+                            rc = int.from_bytes(res_bytes[6:10], byteorder='big')
+                            if rc == 0:
+                                digest = res_bytes[-32:]
+                                pcr_values[pcr_idx] = digest.hex()
+                finally:
+                    tbs.Tbsip_Context_Close(hContext)
+                    
+            if len(pcr_values) == len(pcr_indices):
+                return pcr_values
+        except Exception:
+            pass
+        
+        # 2. Try tpm2-tools if native failed
+        try:
             result = subprocess.run(
                 ["tpm2_pcrread", f"sha256:{','.join(map(str, pcr_indices))}"],
                 capture_output=True,
@@ -131,8 +219,7 @@ class TPMOperations:
         except Exception:
             pass
         
-        # Fallback: generate deterministic values based on system state
-        # In production, this should use actual TPM communication
+        # 3. Fallback: generate deterministic values based on system state
         return self._generate_pcr_fallback(pcr_indices)
     
     def _read_pcrs_linux(self, pcr_indices: List[int]) -> Dict[int, str]:

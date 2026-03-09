@@ -12,7 +12,7 @@ TrustCore-TPM is a Python library for hardware-based device fingerprinting using
 
 - Hardware-rooted device fingerprinting using TPM 2.0
 - PCR-based state binding for platform integrity
-- Cryptographic sealing with AES-256-GCM
+- PCR-bound sealing via TrustCore-TPM
 - Challenge-response authentication protocol
 - Automatic policy enforcement
 - Offline verification capability
@@ -229,7 +229,7 @@ Device fingerprints are cryptographically bound to TPM Platform Configuration Re
 ```mermaid
 stateDiagram-v2
     [*] --> Generated: Device Enrollment
-    Generated --> Valid: TPM Sealing
+    Generated --> Valid: PCR-bound Sealing
     Valid --> Valid: Successful Verification
     Valid --> Expired: Boot State Change
     Valid --> Expired: Firmware Update
@@ -252,7 +252,7 @@ stateDiagram-v2
 
 | Traditional Fingerprinting | TrustCore-TPM |
 |---------------------------|---------------|
-| Software-based hash | Hardware-rooted cryptographic seal |
+| Software-based hash | PCR-bound sealing via TrustCore-TPM |
 | Copyable identifier | Non-exportable capability |
 | Manual revocation | Automatic expiry on state change |
 | No hardware binding | TPM PCR binding |

@@ -36,7 +36,7 @@ pip install trustcore-tpm
 
 - Hardware-rooted device fingerprinting using TPM 2.0
 - PCR-based state binding for platform integrity
-- Cryptographic sealing with AES-256-GCM
+- PCR-bound sealing via TrustCore-TPM
 - Challenge-response authentication protocol
 - Automatic policy enforcement
 - Offline verification capability
