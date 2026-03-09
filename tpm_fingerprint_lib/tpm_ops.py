@@ -109,12 +109,17 @@ class TPMOperations:
             # Try to read from actual TPM if available
             if self.is_tpm_available():
                 import platform
-                if platform.system() == "Windows":
-                    pcr_values = self._read_pcrs_windows(pcr_indices)
-                else:
-                    pcr_values = self._read_pcrs_linux(pcr_indices)
-            else:
-                # Fall back to deterministic PCR generation for testing/simulation
+                try:
+                    if platform.system() == "Windows":
+                        pcr_values = self._read_pcrs_windows(pcr_indices)
+                    else:
+                        pcr_values = self._read_pcrs_linux(pcr_indices)
+                except Exception:
+                    pass
+            
+            # Check if we got all requested PCRs, otherwise fallback
+            if not pcr_values or len(pcr_values) != len(pcr_indices):
+                # Fall back to deterministic PCR generation for testing/simulation/failure
                 pcr_values = self._generate_pcr_fallback(pcr_indices)
             
             return pcr_values
@@ -451,20 +456,90 @@ class TPMOperations:
             pcr_indices = pcr_indices or self.config.DEFAULT_PCRS
             pcr_values = self.read_pcrs(pcr_indices)
             
-            # Create sealed blob
             sealed_blob = {
-                "sealed_data": base64.b64encode(data).decode(),
                 "pcr_indices": pcr_indices,
                 "pcr_values": pcr_values,
                 "timestamp": datetime.now().isoformat(),
                 "algorithm": self.config.HASH_ALGORITHM
             }
             
-            # In production: use TPM sealing
-            # For now: encrypt with PCR-derived key
-            encryption_key = self._derive_key_from_pcrs(pcr_values)
-            encrypted_data = self._encrypt_data(data, encryption_key)
-            sealed_blob["sealed_data"] = base64.b64encode(encrypted_data).decode()
+            # 1. Attempt TPM-backed sealing via tpm2-tools
+            import os
+            import tempfile
+            import subprocess
+            import shutil
+            
+            tpm_sealing_success = False
+            
+            # Primary context cache path
+            primary_ctx_path = os.path.expanduser("~/.tpm_fingerprint/primary.ctx")
+            
+            if self.is_tpm_available():
+                try:
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        # Setup primary context
+                        temp_primary_ctx = os.path.join(temp_dir, "primary.ctx")
+                        if os.path.exists(primary_ctx_path):
+                            shutil.copy2(primary_ctx_path, temp_primary_ctx)
+                        else:
+                            subprocess.run(
+                                ["tpm2_createprimary", "-Q", "-C", "o", "-c", temp_primary_ctx],
+                                check=True, capture_output=True, timeout=10
+                            )
+                            # Cache the primary context
+                            os.makedirs(os.path.dirname(primary_ctx_path), exist_ok=True)
+                            shutil.copy2(temp_primary_ctx, primary_ctx_path)
+                        
+                        # Read PCRs for policy
+                        pcrs_data_path = os.path.join(temp_dir, "pcrs.data")
+                        pcr_spec = f"sha256:{','.join(map(str, pcr_indices))}"
+                        subprocess.run(
+                            ["tpm2_pcrread", pcr_spec, "-o", pcrs_data_path],
+                            check=True, capture_output=True, timeout=10
+                        )
+                        
+                        # Create PCR policy
+                        policy_data_path = os.path.join(temp_dir, "policy.data")
+                        subprocess.run(
+                            ["tpm2_createpolicy", "-Q", "--policy-pcr", "-c", temp_primary_ctx, "-l", pcr_spec, "-f", pcrs_data_path, "-L", policy_data_path],
+                            check=True, capture_output=True, timeout=10
+                        )
+                        
+                        # Write data to file
+                        data_in_path = os.path.join(temp_dir, "data.in")
+                        with open(data_in_path, "wb") as f:
+                            f.write(data)
+                        
+                        # Create sealed object
+                        seal_pub_path = os.path.join(temp_dir, "seal.pub")
+                        seal_priv_path = os.path.join(temp_dir, "seal.priv")
+                        subprocess.run(
+                            ["tpm2_create", "-Q", "-C", temp_primary_ctx, "-i", data_in_path, "-u", seal_pub_path, "-r", seal_priv_path, "-L", policy_data_path],
+                            check=True, capture_output=True, timeout=10
+                        )
+                        
+                        # Read and store public and private blobs
+                        with open(seal_pub_path, "rb") as f:
+                            seal_pub = f.read()
+                        with open(seal_priv_path, "rb") as f:
+                            seal_priv = f.read()
+                            
+                        sealed_blob["sealing_type"] = "tpm2-tools"
+                        sealed_blob["seal_pub"] = base64.b64encode(seal_pub).decode()
+                        sealed_blob["seal_priv"] = base64.b64encode(seal_priv).decode()
+                        
+                        tpm_sealing_success = True
+                        
+                except Exception as ex:
+                    # Log exception or pass, gracefully falling back
+                    pass
+            
+            # 2. Fallback: software PCR-bound AES sealing
+            if not tpm_sealing_success:
+                encryption_key = self._derive_key_from_pcrs(pcr_values)
+                encrypted_data = self._encrypt_data(data, encryption_key)
+                sealed_blob["sealing_type"] = "software"
+                sealed_blob["sealed_data"] = base64.b64encode(encrypted_data).decode()
             
             return json.dumps(sealed_blob).encode()
             
@@ -505,12 +580,63 @@ class TPMOperations:
                         f"expected {sealed_value}, got {current_pcrs[pcr_idx]}"
                     )
             
-            # Unseal data
-            encryption_key = self._derive_key_from_pcrs(current_pcrs)
-            encrypted_data = base64.b64decode(blob["sealed_data"])
-            decrypted_data = self._decrypt_data(encrypted_data, encryption_key)
+            sealing_type = blob.get("sealing_type", "software")
             
-            return decrypted_data
+            if sealing_type == "tpm2-tools":
+                import os
+                import tempfile
+                import subprocess
+                import shutil
+                
+                try:
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        primary_ctx_path = os.path.expanduser("~/.tpm_fingerprint/primary.ctx")
+                        temp_primary_ctx = os.path.join(temp_dir, "primary.ctx")
+                        
+                        if os.path.exists(primary_ctx_path):
+                            shutil.copy2(primary_ctx_path, temp_primary_ctx)
+                        else:
+                            subprocess.run(
+                                ["tpm2_createprimary", "-Q", "-C", "o", "-c", temp_primary_ctx],
+                                check=True, capture_output=True, timeout=10
+                            )
+                            os.makedirs(os.path.dirname(primary_ctx_path), exist_ok=True)
+                            shutil.copy2(temp_primary_ctx, primary_ctx_path)
+                            
+                        seal_pub_path = os.path.join(temp_dir, "seal.pub")
+                        seal_priv_path = os.path.join(temp_dir, "seal.priv")
+                        
+                        with open(seal_pub_path, "wb") as f:
+                            f.write(base64.b64decode(blob["seal_pub"]))
+                        with open(seal_priv_path, "wb") as f:
+                            f.write(base64.b64decode(blob["seal_priv"]))
+                            
+                        seal_ctx_path = os.path.join(temp_dir, "seal.ctx")
+                        subprocess.run(
+                            ["tpm2_load", "-Q", "-C", temp_primary_ctx, "-u", seal_pub_path, "-r", seal_priv_path, "-c", seal_ctx_path],
+                            check=True, capture_output=True, timeout=10
+                        )
+                        
+                        pcr_spec = f"pcr:sha256:{','.join(map(str, blob['pcr_indices']))}"
+                        result = subprocess.run(
+                            ["tpm2_unseal", "-Q", "-c", seal_ctx_path, "-p", pcr_spec],
+                            check=True, capture_output=True, timeout=10
+                        )
+                        
+                        return result.stdout
+                        
+                except subprocess.CalledProcessError as e:
+                    raise UnsealingError(f"tpm2-tools unsealing failed: {e.stderr.decode() if e.stderr else e}")
+                except Exception as e:
+                    raise UnsealingError(f"Hardware unsealing failed: {e}")
+            
+            else:
+                # Fallback / backward-compatibility logic
+                encryption_key = self._derive_key_from_pcrs(current_pcrs)
+                encrypted_data = base64.b64decode(blob["sealed_data"])
+                decrypted_data = self._decrypt_data(encrypted_data, encryption_key)
+                
+                return decrypted_data
             
         except PCRMismatchError:
             raise

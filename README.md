@@ -286,7 +286,8 @@ An attacker who steals the fingerprint file cannot use it on another device beca
 
 1. **Different TPM**: Each TPM has unique internal state
 2. **Different PCR Values**: Each device has unique boot measurements
-3. **Sealed Data**: AES-GCM ciphertext can only be unsealed with correct PCR-derived key
+   - **Hardware sealing**: (`tpm2-tools`) Native TPM `seal.pub` and `seal.priv` bound via `tpm2_create` policy.
+   - **Software fallback**: AES-GCM ciphertext bound with PCR-derived key.
 4. **Challenge-Response**: Each verification requires fresh TPM signature
 
 **Technical Details**:
@@ -294,12 +295,18 @@ An attacker who steals the fingerprint file cannot use it on another device beca
 ```
 Sealed Data Structure:
 ┌────────────────────────────────────────┐
-│ nonce (96-bit random)                  │
-│ ciphertext (AES-256-GCM encrypted)     │
-│ authentication_tag (128-bit GMAC)      │
+│ sealing_type ("tpm2-tools"|"software") │
+│ TPM hardware blobs OR AES ciphertext   │
+│ PCR values and verification data       │
 └────────────────────────────────────────┘
 
-Unsealing Process:
+Unsealing Process (Hardware Sealing):
+1. Extract `seal.pub` and `seal.priv` blobs.
+2. Load object via `tpm2_load` into TPM context.
+3. Unseal via `tpm2_unseal` providing current PCR hashes.
+4. Fail if TPM denies unseal (hardware rejection).
+
+Unsealing Process (Software Fallback):
 1. Read current PCRs from TPM
 2. Derive key = KDF(PCR_0 || PCR_1 || ... || PCR_7)
 3. Attempt AES-GCM decryption
